@@ -1,9 +1,6 @@
 /**
- * FloorPlan3D - Interactive 3D floor plan viewer (CORRECTED)
- * - L-shaped garden
- * - Internal staircase in reception
- * - No external elements
- * - Full touch/mobile support
+ * FloorPlan3D - Interactive 3D floor plan viewer
+ * Supports toggling between schematic (wireframe) and realistic (textured + sun) modes.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
@@ -16,9 +13,17 @@ import {
   createDimensionLines,
   createStairs,
   setupLighting,
+  createRealisticFloors,
+  createRealisticWalls,
+  createRealisticStairs,
+  createRealisticGrid,
 } from "@/lib/sceneBuilder";
+import {
+  createRealisticMaterials,
+} from "@/lib/realisticMode";
 
 type ViewMode = "perspective" | "topdown";
+type RenderMode = "schematic" | "realistic";
 
 export default function FloorPlan3D() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -31,8 +36,15 @@ export default function FloorPlan3D() {
   const [showDimensions, setShowDimensions] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [renderMode, setRenderMode] = useState<RenderMode>("schematic");
   const dimensionGroupRef = useRef<THREE.Group | null>(null);
   const labelGroupRef = useRef<THREE.Group | null>(null);
+
+  // Groups for swapping modes
+  const schematicGroupRef = useRef<THREE.Group | null>(null);
+  const realisticGroupRef = useRef<THREE.Group | null>(null);
+  const schematicLightsRef = useRef<THREE.Group | null>(null);
+  const realisticLightsRef = useRef<THREE.Group | null>(null);
 
   const initScene = useCallback(() => {
     if (!containerRef.current) return;
@@ -68,7 +80,7 @@ export default function FloorPlan3D() {
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Controls - touch friendly
+    // Controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
@@ -86,13 +98,75 @@ export default function FloorPlan3D() {
     };
     controlsRef.current = controls;
 
-    // Build scene
-    setupLighting(scene);
-    scene.add(createGrid());
-    scene.add(createFloors());
-    scene.add(createWalls());
-    scene.add(createStairs());
+    // ── Build SCHEMATIC scene group ──
+    const schematicGroup = new THREE.Group();
+    schematicGroup.add(createGrid());
+    schematicGroup.add(createFloors());
+    schematicGroup.add(createWalls());
+    schematicGroup.add(createStairs());
+    schematicGroupRef.current = schematicGroup;
+    scene.add(schematicGroup);
 
+    // Schematic lighting
+    const schematicLights = new THREE.Group();
+    schematicLights.add(new THREE.AmbientLight(0x334466, 0.8));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(10, 15, 10);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.near = 0.5;
+    dir.shadow.camera.far = 50;
+    dir.shadow.camera.left = -15;
+    dir.shadow.camera.right = 15;
+    dir.shadow.camera.top = 15;
+    dir.shadow.camera.bottom = -15;
+    schematicLights.add(dir);
+    const fill = new THREE.DirectionalLight(0x4488aa, 0.4);
+    fill.position.set(-5, 8, -5);
+    schematicLights.add(fill);
+    schematicLights.add(new THREE.HemisphereLight(0x1a2a4a, 0x0a0a0a, 0.5));
+    schematicLightsRef.current = schematicLights;
+    scene.add(schematicLights);
+
+    // ── Build REALISTIC scene group (hidden initially) ──
+    const realisticMats = createRealisticMaterials();
+    const realisticGroup = new THREE.Group();
+    realisticGroup.add(createRealisticGrid());
+    realisticGroup.add(createRealisticFloors(realisticMats));
+    realisticGroup.add(createRealisticWalls(realisticMats));
+    realisticGroup.add(createRealisticStairs());
+    realisticGroup.visible = false;
+    realisticGroupRef.current = realisticGroup;
+    scene.add(realisticGroup);
+
+    // Realistic lighting (hidden initially)
+    const realisticLights = new THREE.Group();
+    realisticLights.add(new THREE.AmbientLight(0xfff5e6, 0.5));
+    const sun = new THREE.DirectionalLight(0xfff0d0, 1.8);
+    sun.position.set(15, 20, 10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(4096, 4096);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 60;
+    sun.shadow.camera.left = -20;
+    sun.shadow.camera.right = 20;
+    sun.shadow.camera.top = 20;
+    sun.shadow.camera.bottom = -20;
+    sun.shadow.bias = -0.0005;
+    sun.shadow.normalBias = 0.02;
+    realisticLights.add(sun);
+    const fillR = new THREE.DirectionalLight(0x8ab4f8, 0.4);
+    fillR.position.set(-8, 12, -8);
+    realisticLights.add(fillR);
+    realisticLights.add(new THREE.HemisphereLight(0x87ceeb, 0x3a5a2a, 0.6));
+    const interior = new THREE.PointLight(0xffe8c0, 0.3, 15);
+    interior.position.set(0, 2.5, 3);
+    realisticLights.add(interior);
+    realisticLights.visible = false;
+    realisticLightsRef.current = realisticLights;
+    scene.add(realisticLights);
+
+    // ── Labels & Dimensions (shared) ──
     const labels = createLabels();
     labelGroupRef.current = labels;
     scene.add(labels);
@@ -119,13 +193,11 @@ export default function FloorPlan3D() {
       const elapsed = Date.now() - startTime;
       const t = Math.min(elapsed / duration, 1);
       const ease = 1 - Math.pow(1 - t, 3);
-
       camera.position.set(
         startPos.x + (endPos.x - startPos.x) * ease,
         startPos.y + (endPos.y - startPos.y) * ease,
         startPos.z + (endPos.z - startPos.z) * ease
       );
-
       if (t < 1) {
         requestAnimationFrame(animateIntro);
       } else {
@@ -161,6 +233,31 @@ export default function FloorPlan3D() {
     return cleanup;
   }, [initScene]);
 
+  // Toggle render mode
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const renderer = rendererRef.current;
+    if (!scene || !renderer) return;
+
+    const isRealistic = renderMode === "realistic";
+
+    if (schematicGroupRef.current) schematicGroupRef.current.visible = !isRealistic;
+    if (realisticGroupRef.current) realisticGroupRef.current.visible = isRealistic;
+    if (schematicLightsRef.current) schematicLightsRef.current.visible = !isRealistic;
+    if (realisticLightsRef.current) realisticLightsRef.current.visible = isRealistic;
+
+    // Switch background & fog
+    if (isRealistic) {
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.FogExp2(0x87ceeb, 0.008);
+      renderer.toneMappingExposure = 1.0;
+    } else {
+      scene.background = new THREE.Color(0x0d1117);
+      scene.fog = new THREE.FogExp2(0x0d1117, 0.012);
+      renderer.toneMappingExposure = 1.2;
+    }
+  }, [renderMode]);
+
   useEffect(() => {
     if (dimensionGroupRef.current) {
       dimensionGroupRef.current.visible = showDimensions;
@@ -177,17 +274,13 @@ export default function FloorPlan3D() {
     if (!cameraRef.current || !controlsRef.current) return;
     const camera = cameraRef.current;
     const controls = controlsRef.current;
-
     setViewMode(mode);
-
     const targetPos = mode === "topdown"
       ? new THREE.Vector3(0, 22, 0.01)
       : new THREE.Vector3(12, 12, 12);
-
     const startPos = camera.position.clone();
     const duration = 800;
     const startTime = Date.now();
-
     const animateView = () => {
       const elapsed = Date.now() - startTime;
       const t = Math.min(elapsed / duration, 1);
@@ -205,6 +298,10 @@ export default function FloorPlan3D() {
     switchView("perspective");
   }, [switchView]);
 
+  const toggleRenderMode = useCallback(() => {
+    setRenderMode((m) => (m === "schematic" ? "realistic" : "schematic"));
+  }, []);
+
   return (
     <div className="relative w-full h-full" style={{ touchAction: "none" }}>
       <div ref={containerRef} className="w-full h-full" />
@@ -221,11 +318,11 @@ export default function FloorPlan3D() {
 
       {/* Title */}
       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 pointer-events-none">
-        <h1 className="text-white font-mono text-sm sm:text-base font-bold tracking-wider">
+        <h1 className={`font-mono text-sm sm:text-base font-bold tracking-wider ${renderMode === "realistic" ? "text-gray-800" : "text-white"}`}>
           TYPE DU1 — GROUND FLOOR
         </h1>
-        <p className="text-cyan-400/70 font-mono text-[10px] sm:text-xs mt-0.5">
-          Interactive 3D Model · True to Scale
+        <p className={`font-mono text-[10px] sm:text-xs mt-0.5 ${renderMode === "realistic" ? "text-gray-600" : "text-cyan-400/70"}`}>
+          Interactive 3D Model · {renderMode === "realistic" ? "Realistic View" : "Schematic View"}
         </p>
       </div>
 
@@ -258,6 +355,16 @@ export default function FloorPlan3D() {
           Reset
         </button>
         <button
+          onClick={toggleRenderMode}
+          className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded font-mono text-[11px] sm:text-xs transition-all ${
+            renderMode === "realistic"
+              ? "bg-amber-500/30 text-amber-300 border border-amber-500/50"
+              : "bg-black/50 text-gray-400 border border-gray-700/50 hover:text-gray-200"
+          }`}
+        >
+          {renderMode === "realistic" ? "☀ Realistic" : "⬡ Schematic"}
+        </button>
+        <button
           onClick={() => setShowDimensions((d) => !d)}
           className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded font-mono text-[11px] sm:text-xs transition-all ${
             showDimensions
@@ -281,18 +388,22 @@ export default function FloorPlan3D() {
 
       {/* Legend */}
       <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 hidden sm:block">
-        <div className="bg-black/60 backdrop-blur-sm border border-gray-700/50 rounded-lg p-3 font-mono text-[11px]">
-          <div className="text-gray-400 mb-2 font-bold text-xs">LEGEND</div>
+        <div className={`backdrop-blur-sm border rounded-lg p-3 font-mono text-[11px] ${
+          renderMode === "realistic"
+            ? "bg-white/70 border-gray-300/50"
+            : "bg-black/60 border-gray-700/50"
+        }`}>
+          <div className={`mb-2 font-bold text-xs ${renderMode === "realistic" ? "text-gray-700" : "text-gray-400"}`}>LEGEND</div>
           <div className="space-y-1.5">
-            <LegendItem color="#1a5c3a" label="Reception" />
-            <LegendItem color="#5c3a1a" label="Kitchen" />
-            <LegendItem color="#3a1a5c" label="Maid's Room" />
-            <LegendItem color="#1a3a5c" label="Guest Toilet" />
-            <LegendItem color="#2a5c2a" label="Garden" />
-            <div className="border-t border-gray-700/50 my-1.5" />
-            <LegendItem color="#4a5568" label="Internal Stairs" />
-            <LegendItem color="#ffa500" label="Doors" />
-            <LegendItem color="#4488ff" label="Windows" />
+            <LegendItem color={renderMode === "realistic" ? "#d4c4a8" : "#1a5c3a"} label="Reception" dark={renderMode !== "realistic"} />
+            <LegendItem color={renderMode === "realistic" ? "#c8b898" : "#5c3a1a"} label="Kitchen" dark={renderMode !== "realistic"} />
+            <LegendItem color={renderMode === "realistic" ? "#d8c8a8" : "#3a1a5c"} label="Maid's Room" dark={renderMode !== "realistic"} />
+            <LegendItem color={renderMode === "realistic" ? "#e0e8f0" : "#1a3a5c"} label="Guest Toilet" dark={renderMode !== "realistic"} />
+            <LegendItem color={renderMode === "realistic" ? "#3a7a3a" : "#2a5c2a"} label="Garden" dark={renderMode !== "realistic"} />
+            <div className={`border-t my-1.5 ${renderMode === "realistic" ? "border-gray-300/50" : "border-gray-700/50"}`} />
+            <LegendItem color="#888888" label="Stairs" dark={renderMode !== "realistic"} />
+            <LegendItem color="#ffa500" label="Doors" dark={renderMode !== "realistic"} />
+            <LegendItem color="#4488ff" label="Windows" dark={renderMode !== "realistic"} />
           </div>
         </div>
       </div>
@@ -316,11 +427,11 @@ export default function FloorPlan3D() {
   );
 }
 
-function LegendItem({ color, label }: { color: string; label: string }) {
+function LegendItem({ color, label, dark }: { color: string; label: string; dark: boolean }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color, opacity: 0.7 }} />
-      <span className="text-gray-300">{label}</span>
+      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color, opacity: 0.8 }} />
+      <span className={dark ? "text-gray-300" : "text-gray-700"}>{label}</span>
     </div>
   );
 }

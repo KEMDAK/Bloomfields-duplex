@@ -16,6 +16,7 @@ import {
   WALL_HEIGHT,
   type WallSegment,
 } from "./floorPlanData";
+import { type RealisticMaterials, getFloorMaterial } from "./realisticMode";
 
 // Center the property in the scene
 const CENTER_X = (propertyBounds.minX + propertyBounds.maxX) / 2;
@@ -561,6 +562,289 @@ export function setupLighting(scene: THREE.Scene) {
   scene.add(fill);
 
   scene.add(new THREE.HemisphereLight(0x1a2a4a, 0x0a0a0a, 0.5));
+}
+
+// ─── REALISTIC MODE BUILDERS ────────────────────────────────
+
+export function createRealisticGrid(): THREE.Group {
+  const group = new THREE.Group();
+  const propW = propertyBounds.maxX - propertyBounds.minX;
+  const propD = propertyBounds.maxZ - propertyBounds.minZ;
+  const [cx, cz] = toWorld(
+    (propertyBounds.minX + propertyBounds.maxX) / 2,
+    (propertyBounds.minZ + propertyBounds.maxZ) / 2
+  );
+
+  // Ground plane with subtle concrete look
+  const groundGeo = new THREE.PlaneGeometry(propW + 4, propD + 4);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0xc8c0b0,
+    roughness: 0.95,
+    metalness: 0.0,
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.set(cx, -0.02, cz);
+  ground.receiveShadow = true;
+  group.add(ground);
+
+  return group;
+}
+
+export function createRealisticFloors(materials: RealisticMaterials): THREE.Group {
+  const group = new THREE.Group();
+
+  rooms.forEach((room) => {
+    const shape = new THREE.Shape();
+    const [sx, sz] = toWorld(room.vertices[0][0], room.vertices[0][1]);
+    shape.moveTo(sx, -sz);
+    for (let i = 1; i < room.vertices.length; i++) {
+      const [vx, vz] = toWorld(room.vertices[i][0], room.vertices[i][1]);
+      shape.lineTo(vx, -vz);
+    }
+    shape.closePath();
+
+    const geo = new THREE.ShapeGeometry(shape);
+    const mat = getFloorMaterial(room.name, materials).clone();
+    mat.transparent = false;
+    mat.opacity = 1.0;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.01;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  });
+
+  return group;
+}
+
+export function createRealisticWalls(materials: RealisticMaterials): THREE.Group {
+  const group = new THREE.Group();
+
+  walls.forEach((wall) => {
+    const [sx, sz] = toWorld(wall.start[0], wall.start[1]);
+    const [ex, ez] = toWorld(wall.end[0], wall.end[1]);
+    const dx = ex - sx;
+    const dz = ez - sz;
+    const length = Math.sqrt(dx * dx + dz * dz);
+    const angle = Math.atan2(dz, dx);
+
+    const openings = findOpeningsOnWall(wall);
+    const wallMat = wall.isExterior ? materials.exteriorWall.clone() : materials.interiorWall.clone();
+    wallMat.transparent = false;
+    wallMat.opacity = 1.0;
+
+    if (openings.length === 0) {
+      const geo = new THREE.BoxGeometry(length, wall.height, wall.thickness);
+      const mesh = new THREE.Mesh(geo, wallMat);
+      mesh.position.set(sx + dx / 2, wall.height / 2, sz + dz / 2);
+      mesh.rotation.y = -angle;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    } else {
+      // Build wall with openings using realistic materials
+      let curT = 0;
+      for (const op of openings) {
+        const halfW = op.width / (2 * length);
+        const opStart = Math.max(0, op.t - halfW);
+        const opEnd = Math.min(1, op.t + halfW);
+
+        if (opStart > curT + 0.005) {
+          const segLen = (opStart - curT) * length;
+          const midT = (curT + opStart) / 2;
+          const geo = new THREE.BoxGeometry(segLen, wall.height, wall.thickness);
+          const mesh = new THREE.Mesh(geo, wallMat);
+          mesh.position.set(sx + midT * dx, wall.height / 2, sz + midT * dz);
+          mesh.rotation.y = -angle;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          group.add(mesh);
+        }
+
+        const posX = sx + op.t * dx;
+        const posZ = sz + op.t * dz;
+
+        if (op.type === "window") {
+          // Sill below window
+          if (op.bottomY > 0.05) {
+            const geo = new THREE.BoxGeometry(op.width, op.bottomY, wall.thickness);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(posX, op.bottomY / 2, posZ);
+            mesh.rotation.y = -angle;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+          }
+          // Wall above window
+          const topY = op.bottomY + op.height;
+          if (topY < wall.height - 0.05) {
+            const aboveH = wall.height - topY;
+            const geo = new THREE.BoxGeometry(op.width, aboveH, wall.thickness);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(posX, topY + aboveH / 2, posZ);
+            mesh.rotation.y = -angle;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+          }
+          // Realistic glass (lightweight)
+          const glassGeo = new THREE.PlaneGeometry(op.width, op.height);
+          const glassMat = new THREE.MeshStandardMaterial({
+            color: 0x88ccff,
+            transparent: true,
+            opacity: 0.3,
+            roughness: 0.0,
+            metalness: 0.2,
+            side: THREE.DoubleSide,
+          });
+          const glass = new THREE.Mesh(glassGeo, glassMat);
+          glass.position.set(posX, op.bottomY + op.height / 2, posZ);
+          glass.rotation.y = -angle;
+          group.add(glass);
+
+          // Window frame
+          const frameMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3, metalness: 0.2 });
+          // Top frame
+          const ftGeo = new THREE.BoxGeometry(op.width + 0.04, 0.04, wall.thickness + 0.02);
+          const ft = new THREE.Mesh(ftGeo, frameMat);
+          ft.position.set(posX, op.bottomY + op.height, posZ);
+          ft.rotation.y = -angle;
+          group.add(ft);
+          // Bottom frame (sill)
+          const fbGeo = new THREE.BoxGeometry(op.width + 0.06, 0.05, wall.thickness + 0.06);
+          const fb = new THREE.Mesh(fbGeo, frameMat);
+          fb.position.set(posX, op.bottomY, posZ);
+          fb.rotation.y = -angle;
+          group.add(fb);
+        }
+
+        if (op.type === "door") {
+          // Wall above door
+          if (op.height < wall.height - 0.05) {
+            const aboveH = wall.height - op.height;
+            const geo = new THREE.BoxGeometry(op.width, aboveH, wall.thickness);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(posX, op.height + aboveH / 2, posZ);
+            mesh.rotation.y = -angle;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+          }
+          // Realistic door panel
+          const doorMat = new THREE.MeshStandardMaterial({
+            color: 0x6B4226,
+            roughness: 0.6,
+            metalness: 0.05,
+            side: THREE.DoubleSide,
+          });
+          const doorPanel = new THREE.Mesh(new THREE.PlaneGeometry(op.width * 0.95, op.height * 0.98), doorMat);
+          doorPanel.position.set(posX, op.height / 2, posZ);
+          doorPanel.rotation.y = -angle + 0.3;
+          doorPanel.castShadow = true;
+          group.add(doorPanel);
+
+          // Door frame
+          const frameMat = new THREE.MeshStandardMaterial({ color: 0xf0ece4, roughness: 0.5 });
+          const frameGeo = new THREE.BoxGeometry(op.width + 0.06, 0.05, wall.thickness + 0.04);
+          const frame = new THREE.Mesh(frameGeo, frameMat);
+          frame.position.set(posX, op.height, posZ);
+          frame.rotation.y = -angle;
+          group.add(frame);
+        }
+
+        curT = opEnd;
+      }
+
+      if (curT < 0.995) {
+        const segLen = (1 - curT) * length;
+        const midT = (curT + 1) / 2;
+        const geo = new THREE.BoxGeometry(segLen, wall.height, wall.thickness);
+        const mesh = new THREE.Mesh(geo, wallMat);
+        mesh.position.set(sx + midT * dx, wall.height / 2, sz + midT * dz);
+        mesh.rotation.y = -angle;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+      }
+    }
+  });
+
+  return group;
+}
+
+export function createRealisticStairs(): THREE.Group {
+  const group = new THREE.Group();
+  const s = internalStairs;
+  const [baseX, baseZ] = toWorld(s.x, s.z);
+  const totalW = s.width;
+  const totalD = s.depth;
+  const landingD = s.landingDepth;
+  const flightW = s.leftFlightWidth;
+  const leftFlightDepth = totalD - landingD;
+  const stepsPerFlight = Math.floor(s.stepCount / 2);
+  const stepD = leftFlightDepth / stepsPerFlight;
+  const stepH = WALL_HEIGHT / s.stepCount;
+
+  const stepMat = new THREE.MeshStandardMaterial({
+    color: 0xb0a090,
+    roughness: 0.6,
+    metalness: 0.0,
+  });
+
+  // Left flight
+  for (let i = 0; i < stepsPerFlight; i++) {
+    const geo = new THREE.BoxGeometry(flightW * 0.9, stepH, stepD * 0.85);
+    const step = new THREE.Mesh(geo, stepMat);
+    const z = baseZ + totalD - (i + 0.5) * stepD;
+    step.position.set(baseX + flightW / 2, stepH * i + stepH / 2, z);
+    step.castShadow = true;
+    step.receiveShadow = true;
+    group.add(step);
+  }
+
+  // Landing
+  const landingGeo = new THREE.BoxGeometry(totalW * 0.95, stepH, landingD * 0.9);
+  const landing = new THREE.Mesh(landingGeo, stepMat);
+  landing.position.set(baseX + totalW / 2, stepH * stepsPerFlight + stepH / 2, baseZ + landingD / 2);
+  landing.castShadow = true;
+  landing.receiveShadow = true;
+  group.add(landing);
+
+  // Right flight
+  for (let i = 0; i < stepsPerFlight; i++) {
+    const geo = new THREE.BoxGeometry(flightW * 0.9, stepH, stepD * 0.85);
+    const step = new THREE.Mesh(geo, stepMat);
+    const z = baseZ + landingD + (i + 0.5) * stepD;
+    step.position.set(baseX + totalW - flightW / 2, stepH * (stepsPerFlight - i) + stepH / 2, z);
+    step.castShadow = true;
+    step.receiveShadow = true;
+    group.add(step);
+  }
+
+  // Handrails — metallic
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.3, metalness: 0.7 });
+  const railRadius = 0.03;
+
+  // Left outer rail
+  const lrPts = [
+    new THREE.Vector3(baseX, 1.0, baseZ + totalD),
+    new THREE.Vector3(baseX, 1.0 + stepH * stepsPerFlight, baseZ + landingD),
+  ];
+  const lrCurve = new THREE.LineCurve3(lrPts[0], lrPts[1]);
+  const lrGeo = new THREE.TubeGeometry(lrCurve, 8, railRadius, 8, false);
+  group.add(new THREE.Mesh(lrGeo, railMat));
+
+  // Right outer rail
+  const rrPts = [
+    new THREE.Vector3(baseX + totalW, 1.0 + stepH * stepsPerFlight, baseZ + landingD),
+    new THREE.Vector3(baseX + totalW, 1.0, baseZ + totalD),
+  ];
+  const rrCurve = new THREE.LineCurve3(rrPts[0], rrPts[1]);
+  const rrGeo = new THREE.TubeGeometry(rrCurve, 8, railRadius, 8, false);
+  group.add(new THREE.Mesh(rrGeo, railMat));
+
+  return group;
 }
 
 // ─── Text Sprite Helper ─────────────────────────────────────

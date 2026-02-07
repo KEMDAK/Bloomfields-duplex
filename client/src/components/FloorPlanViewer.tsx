@@ -34,7 +34,12 @@ import {
   createDimensionLines,
   createStairs,
   setupLighting,
+  createRealisticFloors,
+  createRealisticWalls,
+  createRealisticStairs,
+  createRealisticGrid,
 } from "@/lib/sceneBuilder";
+import { createRealisticMaterials } from "@/lib/realisticMode";
 
 type ViewMode = "2d" | "3d";
 
@@ -70,6 +75,7 @@ export default function FloorPlanViewer() {
   const [showDims, setShowDims] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [realistic, setRealistic] = useState(false);
 
   return (
     <div className="relative w-full overflow-hidden" style={{ height: "100dvh", backgroundColor: "#0d1117" }}>
@@ -90,6 +96,7 @@ export default function FloorPlanViewer() {
           showDims={showDims}
           showLabels={showLabels}
           active={mode === "3d"}
+          realistic={realistic}
           onLoaded={() => setIsLoaded(true)}
         />
       </div>
@@ -161,6 +168,19 @@ export default function FloorPlanViewer() {
               3D
             </button>
           </div>
+
+          {mode === "3d" && (
+            <button
+              onClick={() => setRealistic((r) => !r)}
+              className={`px-2.5 py-1.5 rounded font-mono text-[11px] sm:text-xs transition-all ${
+                realistic
+                  ? "bg-amber-500/30 text-amber-300 border border-amber-500/50"
+                  : "bg-black/50 text-gray-400 border border-gray-700/50 hover:text-gray-200"
+              }`}
+            >
+              {realistic ? "\u2600 Realistic" : "\u2B21 Schematic"}
+            </button>
+          )}
 
           <button
             onClick={() => setShowDims((d) => !d)}
@@ -825,11 +845,13 @@ function Scene3D({
   showDims,
   showLabels,
   active,
+  realistic,
   onLoaded,
 }: {
   showDims: boolean;
   showLabels: boolean;
   active: boolean;
+  realistic: boolean;
   onLoaded: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -841,6 +863,12 @@ function Scene3D({
   const dimensionGroupRef = useRef<THREE.Group | null>(null);
   const labelGroupRef = useRef<THREE.Group | null>(null);
   const initRef = useRef(false);
+
+  // Groups for mode switching
+  const schematicGroupRef = useRef<THREE.Group | null>(null);
+  const realisticGroupRef = useRef<THREE.Group | null>(null);
+  const schematicLightsRef = useRef<THREE.Group | null>(null);
+  const realisticLightsRef = useRef<THREE.Group | null>(null);
 
   const initScene = useCallback(() => {
     if (!containerRef.current || initRef.current) return;
@@ -860,11 +888,18 @@ function Scene3D({
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: "high-performance",
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+      });
+    } catch (e) {
+      console.error('WebGL not available:', e);
+      initRef.current = false;
+      return;
+    }
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
@@ -873,6 +908,16 @@ function Scene3D({
     renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+
+    // Handle context lost
+    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      console.warn('WebGL context lost');
+      cancelAnimationFrame(animFrameRef.current);
+    });
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      console.log('WebGL context restored');
+    });
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -888,12 +933,39 @@ function Scene3D({
     controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
     controlsRef.current = controls;
 
-    setupLighting(scene);
-    scene.add(createGrid());
-    scene.add(createFloors());
-    scene.add(createWalls());
-    scene.add(createStairs());
+    // ── Schematic mode ──
+    const schematicGroup = new THREE.Group();
+    schematicGroup.add(createGrid());
+    schematicGroup.add(createFloors());
+    schematicGroup.add(createWalls());
+    schematicGroup.add(createStairs());
+    schematicGroupRef.current = schematicGroup;
+    scene.add(schematicGroup);
 
+    const schematicLights = new THREE.Group();
+    schematicLights.add(new THREE.AmbientLight(0x334466, 0.8));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(10, 15, 10);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.near = 0.5;
+    dir.shadow.camera.far = 50;
+    dir.shadow.camera.left = -15;
+    dir.shadow.camera.right = 15;
+    dir.shadow.camera.top = 15;
+    dir.shadow.camera.bottom = -15;
+    schematicLights.add(dir);
+    const fill = new THREE.DirectionalLight(0x4488aa, 0.4);
+    fill.position.set(-5, 8, -5);
+    schematicLights.add(fill);
+    schematicLights.add(new THREE.HemisphereLight(0x1a2a4a, 0x0a0a0a, 0.5));
+    schematicLightsRef.current = schematicLights;
+    scene.add(schematicLights);
+
+    // ── Realistic mode (lazy-initialized on first toggle) ──
+    // Groups created on demand to avoid memory crash
+
+    // ── Labels & Dimensions (shared) ──
     const labels = createLabels();
     labelGroupRef.current = labels;
     scene.add(labels);
@@ -939,6 +1011,66 @@ function Scene3D({
       return () => clearTimeout(timer);
     }
   }, [active, initScene]);
+
+  // Toggle realistic mode (lazy init)
+  useEffect(() => {
+    const scene = sceneRef.current;
+    const renderer = rendererRef.current;
+    if (!scene || !renderer) return;
+
+    // Lazy-create realistic group on first toggle
+    if (realistic && !realisticGroupRef.current) {
+      try {
+        const realisticMats = createRealisticMaterials();
+        const realisticGroup = new THREE.Group();
+        realisticGroup.add(createRealisticGrid());
+        realisticGroup.add(createRealisticFloors(realisticMats));
+        realisticGroup.add(createRealisticWalls(realisticMats));
+        realisticGroup.add(createRealisticStairs());
+        realisticGroupRef.current = realisticGroup;
+        scene.add(realisticGroup);
+
+        const realisticLights = new THREE.Group();
+        realisticLights.add(new THREE.AmbientLight(0xfff5e6, 0.5));
+        const sun = new THREE.DirectionalLight(0xfff0d0, 1.6);
+        sun.position.set(15, 20, 10);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(1024, 1024);
+        sun.shadow.camera.near = 0.5;
+        sun.shadow.camera.far = 50;
+        sun.shadow.camera.left = -15;
+        sun.shadow.camera.right = 15;
+        sun.shadow.camera.top = 15;
+        sun.shadow.camera.bottom = -15;
+        sun.shadow.bias = -0.001;
+        realisticLights.add(sun);
+        const fillR = new THREE.DirectionalLight(0x8ab4f8, 0.3);
+        fillR.position.set(-8, 12, -8);
+        realisticLights.add(fillR);
+        realisticLights.add(new THREE.HemisphereLight(0x87ceeb, 0x3a5a2a, 0.5));
+        realisticLightsRef.current = realisticLights;
+        scene.add(realisticLights);
+      } catch (err) {
+        console.error('Failed to create realistic scene:', err);
+        return;
+      }
+    }
+
+    if (schematicGroupRef.current) schematicGroupRef.current.visible = !realistic;
+    if (realisticGroupRef.current) realisticGroupRef.current.visible = realistic;
+    if (schematicLightsRef.current) schematicLightsRef.current.visible = !realistic;
+    if (realisticLightsRef.current) realisticLightsRef.current.visible = realistic;
+
+    if (realistic) {
+      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.FogExp2(0x87ceeb, 0.008);
+      renderer.toneMappingExposure = 1.0;
+    } else {
+      scene.background = new THREE.Color(0x0d1117);
+      scene.fog = new THREE.FogExp2(0x0d1117, 0.012);
+      renderer.toneMappingExposure = 1.2;
+    }
+  }, [realistic]);
 
   useEffect(() => {
     if (dimensionGroupRef.current) dimensionGroupRef.current.visible = showDims;
