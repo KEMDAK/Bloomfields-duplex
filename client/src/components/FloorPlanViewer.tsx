@@ -40,6 +40,7 @@ import {
   createRealisticGrid,
 } from "@/lib/sceneBuilder";
 import { createRealisticMaterials } from "@/lib/realisticMode";
+import { POVController } from "@/lib/povController";
 
 type ViewMode = "2d" | "3d";
 
@@ -76,6 +77,8 @@ export default function FloorPlanViewer() {
   const [showLabels, setShowLabels] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [realistic, setRealistic] = useState(false);
+  const [povMode, setPovMode] = useState(false);
+  const [povActive, setPovActive] = useState(false); // true when pointer is locked
 
   return (
     <div className="relative w-full overflow-hidden" style={{ height: "100dvh", backgroundColor: "#0d1117" }}>
@@ -97,6 +100,9 @@ export default function FloorPlanViewer() {
           showLabels={showLabels}
           active={mode === "3d"}
           realistic={realistic}
+          povMode={povMode}
+          onPovLock={() => setPovActive(true)}
+          onPovUnlock={() => { setPovActive(false); setPovMode(false); }}
           onLoaded={() => setIsLoaded(true)}
         />
       </div>
@@ -169,17 +175,25 @@ export default function FloorPlanViewer() {
             </button>
           </div>
 
-          {mode === "3d" && (
-            <button
-              onClick={() => setRealistic((r) => !r)}
-              className={`px-2.5 py-1.5 rounded font-mono text-[11px] sm:text-xs transition-all ${
-                realistic
-                  ? "bg-amber-500/30 text-amber-300 border border-amber-500/50"
-                  : "bg-black/50 text-gray-400 border border-gray-700/50 hover:text-gray-200"
-              }`}
-            >
-              {realistic ? "\u2600 Realistic" : "\u2B21 Schematic"}
-            </button>
+          {mode === "3d" && !povActive && (
+            <>
+              <button
+                onClick={() => setRealistic((r) => !r)}
+                className={`px-2.5 py-1.5 rounded font-mono text-[11px] sm:text-xs transition-all ${
+                  realistic
+                    ? "bg-amber-500/30 text-amber-300 border border-amber-500/50"
+                    : "bg-black/50 text-gray-400 border border-gray-700/50 hover:text-gray-200"
+                }`}
+              >
+                {realistic ? "\u2600 Realistic" : "\u2B21 Schematic"}
+              </button>
+              <button
+                onClick={() => setPovMode(true)}
+                className="px-2.5 py-1.5 rounded font-mono text-[11px] sm:text-xs transition-all bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 hover:bg-emerald-500/40"
+              >
+                🚶 Walk
+              </button>
+            </>
           )}
 
           <button
@@ -219,12 +233,32 @@ export default function FloorPlanViewer() {
         )}
 
         {/* Touch hint (3D, mobile) */}
-        {mode === "3d" && (
+        {mode === "3d" && !povActive && (
           <div className="absolute bottom-14 left-1/2 -translate-x-1/2 sm:hidden">
             <p className="text-gray-500 font-mono text-[10px] bg-black/40 px-3 py-1 rounded-full">
               Swipe to rotate · Pinch to zoom
             </p>
           </div>
+        )}
+
+        {/* POV Mode Overlay */}
+        {povActive && (
+          <>
+            {/* Crosshair */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative w-6 h-6">
+                <div className="absolute top-1/2 left-0 right-0 h-px bg-white/40" />
+                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white/60" />
+              </div>
+            </div>
+            {/* Controls hint */}
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none">
+              <div className="bg-black/70 backdrop-blur-sm border border-gray-600/50 rounded-lg px-4 py-2 font-mono text-[11px] text-gray-300 text-center">
+                <span className="text-emerald-400">WASD</span> Move &nbsp;·&nbsp; <span className="text-emerald-400">Mouse</span> Look &nbsp;·&nbsp; <span className="text-emerald-400">ESC</span> Exit
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -846,12 +880,18 @@ function Scene3D({
   showLabels,
   active,
   realistic,
+  povMode,
+  onPovLock,
+  onPovUnlock,
   onLoaded,
 }: {
   showDims: boolean;
   showLabels: boolean;
   active: boolean;
   realistic: boolean;
+  povMode: boolean;
+  onPovLock: () => void;
+  onPovUnlock: () => void;
   onLoaded: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -863,6 +903,9 @@ function Scene3D({
   const dimensionGroupRef = useRef<THREE.Group | null>(null);
   const labelGroupRef = useRef<THREE.Group | null>(null);
   const initRef = useRef(false);
+  const povControllerRef = useRef<POVController | null>(null);
+  const savedCamPos = useRef(new THREE.Vector3(14, 14, 14));
+  const savedCamTarget = useRef(new THREE.Vector3(0, 0, 2));
 
   // Groups for mode switching
   const schematicGroupRef = useRef<THREE.Group | null>(null);
@@ -976,7 +1019,12 @@ function Scene3D({
 
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate);
-      controls.update();
+      const pov = povControllerRef.current;
+      if (pov && pov.enabled) {
+        pov.update();
+      } else {
+        controls.update();
+      }
       renderer.render(scene, camera);
     };
     animate();
@@ -996,6 +1044,10 @@ function Scene3D({
     return () => {
       window.removeEventListener("resize", handleResize);
       cancelAnimationFrame(animFrameRef.current);
+      if (povControllerRef.current) {
+        povControllerRef.current.dispose();
+        povControllerRef.current = null;
+      }
       controls.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) {
@@ -1079,6 +1131,56 @@ function Scene3D({
   useEffect(() => {
     if (labelGroupRef.current) labelGroupRef.current.visible = showLabels;
   }, [showLabels]);
+
+  // POV mode toggle
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    const container = containerRef.current;
+    if (!camera || !controls || !container) return;
+
+    if (povMode) {
+      // Save current orbit camera state
+      savedCamPos.current.copy(camera.position);
+      savedCamTarget.current.copy(controls.target);
+
+      // Disable orbit controls
+      controls.enabled = false;
+
+      // Create POV controller if not exists
+      if (!povControllerRef.current) {
+        povControllerRef.current = new POVController(camera, container);
+      }
+      const pov = povControllerRef.current;
+      pov.onLock = onPovLock;
+      pov.onUnlock = () => {
+        // Restore orbit camera
+        if (controlsRef.current && cameraRef.current) {
+          cameraRef.current.position.copy(savedCamPos.current);
+          controlsRef.current.target.copy(savedCamTarget.current);
+          controlsRef.current.enabled = true;
+          cameraRef.current.lookAt(savedCamTarget.current);
+        }
+        onPovUnlock();
+      };
+
+      // Widen FOV for immersion
+      camera.fov = 75;
+      camera.updateProjectionMatrix();
+      pov.enable();
+    } else {
+      // Disable POV
+      if (povControllerRef.current && povControllerRef.current.enabled) {
+        povControllerRef.current.disable();
+      }
+      // Restore orbit
+      camera.fov = 50;
+      camera.updateProjectionMatrix();
+      camera.position.copy(savedCamPos.current);
+      controls.target.copy(savedCamTarget.current);
+      controls.enabled = true;
+    }
+  }, [povMode, onPovLock, onPovUnlock]);
 
   return (
     <div ref={containerRef} className="w-full h-full" style={{ touchAction: "none" }} />
