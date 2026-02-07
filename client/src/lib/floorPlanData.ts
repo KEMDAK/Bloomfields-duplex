@@ -283,12 +283,13 @@ export const rooms: Room[] = [
       [REC_EAST, APT_DEPTH],             // reception SE
       [REC_EAST, K_Z1],                  // up to kitchen south level
       [K_X1, K_Z1],                      // kitchen SE corner
-      [K_X1 + 3, K_Z1],                  // garden extends east
+      [K_X1, ROOMS_Z0],                  // up to kitchen north wall (z=0)
+      [K_X1 + 3, ROOMS_Z0],              // garden extends east from north
       [K_X1 + 3, APT_DEPTH + 3],         // garden SE
       [0, APT_DEPTH + 3],                // garden SW
     ],
     color: COLORS.garden,
-    labelPosition: [K_X1 + 1, (K_Z1 + APT_DEPTH + 3) / 2],
+    labelPosition: [K_X1 + 1, (ROOMS_Z0 + APT_DEPTH + 3) / 2],
     dimensions: "Garden",
   },
 ];
@@ -347,8 +348,8 @@ export const walls: WallSegment[] = [
   // ═══ GARDEN BOUNDARY (low walls) ═══
   { start: [0, APT_DEPTH], end: [0, APT_DEPTH + 3], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
   { start: [0, APT_DEPTH + 3], end: [K_X1 + 3, APT_DEPTH + 3], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
-  { start: [K_X1 + 3, K_Z1], end: [K_X1 + 3, APT_DEPTH + 3], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
-  { start: [K_X1, K_Z1], end: [K_X1 + 3, K_Z1], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
+  { start: [K_X1 + 3, ROOMS_Z0], end: [K_X1 + 3, APT_DEPTH + 3], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
+  { start: [K_X1, ROOMS_Z0], end: [K_X1 + 3, ROOMS_Z0], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
 
 
   // ═══ INTERIOR WALLS ═══
@@ -387,10 +388,11 @@ export const walls: WallSegment[] = [
 // DOORS
 // ============================================================
 export const doors: DoorOpening[] = [
-  // 1. Entrance door: on the west wall, in the notch area
+  // 1. Entrance door: on the west wall, below the notch
   //    Arc swings inward (east) into the space below the stairs
+  //    Shifted lower on the west wall
   {
-    position: [0, NOTCH_H + 0.05],
+    position: [0, NOTCH_H + 0.60],
     width: 1.0,
     height: DOOR_HEIGHT,
     wallDirection: "z",
@@ -406,14 +408,7 @@ export const doors: DoorOpening[] = [
     wallDirection: "x",
   },
 
-  // 3. Maid's Bathroom door: on MB's south wall (z=1.98)
-  //    Arc swings north into the MB room
-  {
-    position: [MB_X0 + 0.45, MB_Z1],
-    width: 0.70,
-    height: DOOR_HEIGHT,
-    wallDirection: "x",
-  },
+  // 3. (REMOVED: Maid's Bathroom has no door to reception)
 
   // 4. Maid's Room door: on the wall between MB and MR (x=MB_X1)
   //    Entrance from Maid's Bathroom, arc swings east into MR
@@ -526,30 +521,35 @@ export const windows: WindowOpening[] = [
 // DIMENSION LINES
 // ============================================================
 export const dimensionLines: DimensionLine[] = [
-  // Top row room widths
-  { start: [S_X0, 0], end: [S_X1, 0], label: `${STAIR_W}m`, offset: -0.4 },
-  { start: [GT_X0, 0], end: [GT_X1, 0], label: `${GT_W}m`, offset: -0.4 },
-  { start: [MB_X0, 0], end: [MB_X1, 0], label: `${MB_W}m`, offset: -0.4 },
-  { start: [MR_X0, 0], end: [MR_X1, 0], label: `${MR_W}m`, offset: -0.4 },
-  { start: [K_X0, 0], end: [K_X1, 0], label: `${KIT_W}m`, offset: -0.4 },
+  // ═══ TOP ROW ROOM WIDTHS (horizontal, above north wall) ═══
+  { start: [S_X0, ROOMS_Z0], end: [S_X1, ROOMS_Z0], label: `${STAIR_W}m`, offset: -0.4 },
+  { start: [GT_X0, ROOMS_Z0], end: [GT_X1, ROOMS_Z0], label: `${GT_W}m`, offset: -0.4 },
+  { start: [MB_X0, ROOMS_Z0], end: [MB_X1, ROOMS_Z0], label: `${MB_W}m`, offset: -0.4 },
+  { start: [MR_X0, ROOMS_Z0], end: [MR_X1, ROOMS_Z0], label: `${MR_W}m`, offset: -0.4 },
+  { start: [K_X0, ROOMS_Z0], end: [K_X1, ROOMS_Z0], label: `${KIT_W}m`, offset: -0.4 },
 
-  // Room depths (right side)
-  { start: [MB_X1, 0], end: [MB_X1, GT_Z1], label: `${ROOM_D}m`, offset: 0.4 },
-  { start: [MR_X1, 0], end: [MR_X1, MR_Z1], label: `${MR_D}m`, offset: 0.4 },
-  { start: [K_X1, 0], end: [K_X1, K_Z1], label: `${KIT_D}m`, offset: 0.5 },
+  // Total top row width (above the individual widths)
+  { start: [S_X0, ROOMS_Z0], end: [K_X1, ROOMS_Z0], label: `${(K_X1 - S_X0).toFixed(2)}m`, offset: -0.8 },
 
-  // Corridor depth
+  // ═══ ROOM DEPTHS (vertical, on the right side of rooms) ═══
+  // GT/MB depth: right edge of MB, from z=0 to z=GT_Z1
+  { start: [MB_X1, ROOMS_Z0], end: [MB_X1, GT_Z1], label: `${ROOM_D}m`, offset: 0.4 },
+  // MR depth: right edge of MR, from z=0 to z=MR_Z1
+  { start: [MR_X1, ROOMS_Z0], end: [MR_X1, MR_Z1], label: `${MR_D}m`, offset: 0.4 },
+  // Kitchen depth: right edge of kitchen, from z=0 to z=K_Z1
+  { start: [K_X1, ROOMS_Z0], end: [K_X1, K_Z1], label: `${KIT_D}m`, offset: 0.5 },
+
+  // ═══ CORRIDOR DEPTH (vertical, left of corridor) ═══
   { start: [MR_X0, CORR_Z0], end: [MR_X0, CORR_Z1], label: `${CORR_D}m`, offset: -0.4 },
 
-  // Reception depths
+  // ═══ RECEPTION DEPTHS (vertical) ═══
+  // Left side: from top of reception (WALL_BELOW_ROOMS) to south wall (APT_DEPTH)
   { start: [0, WALL_BELOW_ROOMS], end: [0, APT_DEPTH], label: `${REC_LEFT_D}m`, offset: -0.8 },
+  // Right side: from corridor bottom (CORR_Z1) to south wall (APT_DEPTH)
   { start: [REC_EAST, CORR_Z1], end: [REC_EAST, APT_DEPTH], label: `${REC_RIGHT_D}m`, offset: 0.8 },
 
-  // Notch width
+  // ═══ NOTCH WIDTH (horizontal, below notch) ═══
   { start: [0, NOTCH_H], end: [NOTCH_W, NOTCH_H], label: `${NOTCH_W}m`, offset: 0.3 },
-
-  // Total top row width
-  { start: [NOTCH_W, 0], end: [K_X1, 0], label: `${(K_X1 - NOTCH_W).toFixed(2)}m`, offset: -0.8 },
 ];
 
 // ============================================================
