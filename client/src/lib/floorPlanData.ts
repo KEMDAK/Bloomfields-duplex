@@ -1,113 +1,123 @@
 /**
  * Floor Plan Data — Type DU1 Ground Floor
- * DEFINITIVE v9
+ * DEFINITIVE v10
  *
  * Coordinate system:
- *   Origin (0,0) = northwest corner of the BUILDING ENVELOPE (top-left)
+ *   Origin (0,0) = northwest corner of the APARTMENT ENVELOPE
  *   X = increases to the RIGHT (east)
  *   Z = increases DOWNWARD (south)
  *
  * LAYOUT (looking from above, north at top):
  *
- *   NOTCH +-------+----+----+---------+-----------+
- *   (out) |       | GT | MB | Maid's  |           |
- *         | Stairs|    |    | Room    |  Kitchen  |
- *         |  (U)  +----+----+---------+           |
- *         | (open)| Corridor          |           |
- *         |       |                   +-----------+
- *         +-------+---+                     |
- *         |            |                    |
- *         |  Reception |                    |
- *         |  (open to  |                    |
- *         |   stairs)  |                    |
- *         |            |                    |
- *         +------------+--------------------+
+ *   NW notch is to the LEFT of stairs.
+ *   All rooms are on the SAME ROW at the top.
  *
- *   The reception is a wide open space.
- *   The reception's east wall aligns with the right edge of the Maid's Room (PART_X).
- *   Below the corridor, from PART_X to K_X1, there's an exterior wall step.
- *   Kitchen extends further SOUTH (to z=4.12) than the corridor bottom (z=3.35).
- *   Garden is L-shaped: south of apartment + east of kitchen.
- *   Entrance is on the WEST wall near the stairs.
- *   The top-left corner has a NOTCH — the "C" area is outside the apartment.
+ *     NOTCH                                                    
+ *     (out) | Stairs |  GT  |  MB  | Maid's Room | Kitchen    |
+ *      "C"  |  (U)   |      |      |             |            |
+ *           |        +------+------+------+------+            |
+ *           |        |  (open)     | Corridor    |            |
+ *           |        |             |  (MR→Kit)   +------------+
+ *           +--------+             +-------------+ Kit extends
+ *           |                      |             | into garden
+ *           |     Reception        |             |
+ *           |   (full width below) |  Reception  |
+ *           |   5.78m deep left    |  3.93m right|
+ *           |                      |             |
+ *           +----------------------+-------------+
  *
- * ROOMS:
- *   GT  = Guest Toilet
- *   MB  = Maid's Bathroom
+ *   - Stairs are on same row as rooms, notch to their left
+ *   - Corridor runs from Kitchen to Maid's Room ONLY
+ *   - Below stairs/GT/MB: open to reception (no corridor wall)
+ *   - Maid's Room entrance is from Maid's Bathroom
+ *   - Kitchen extends south to z=4.12 (into garden area)
+ *   - Reception: 11.72m wide, 5.78m deep (left), 3.93m deep (right)
+ *   - Garden: L-shaped, south + east of apartment
  */
 
 export const WALL_HEIGHT = 3.0;
 export const EXT_WALL = 0.20;
-export const INT_WALL = 0.15;
+export const INT_WALL = 0.10;
 export const DOOR_HEIGHT = 2.4;
 export const WINDOW_HEIGHT = 1.2;
 export const WINDOW_SILL = 0.9;
 
 // ============================================================
-// MASTER DIMENSIONS (all in meters, from the plan labels)
+// MASTER DIMENSIONS (meters, from plan labels + user corrections)
 // ============================================================
+const NOTCH_W = 0.50;   // notch width (NW corner cutout)
+const NOTCH_H = 1.80;   // notch height
 
-// 5.78m spans from the west wall to the east edge of Maid's Bathroom
-// It includes: stairs + wall + GT + wall + MB
-const SPAN_578 = 5.78;
-const GT_W = 1.22;    // Guest Toilet width
-const MB_W = 1.22;    // Maid's Bathroom width
+const GT_W = 1.22;      // Guest Toilet width
+const MB_W = 1.22;      // Maid's Bathroom width
+const MR_W = 1.98;      // Maid's Room width
+const KIT_W = 3.31;     // Kitchen width
 
-// Stairs width = 5.78 - wall - GT - wall - MB
-const STAIR_W = SPAN_578 - INT_WALL - GT_W - INT_WALL - MB_W; // ≈ 3.04
+const ROOM_D = 1.98;    // GT & MB depth (north to south)
+const MR_D = 2.71;      // Maid's Room depth
+const KIT_D = 4.12;     // Kitchen depth (extends into garden)
+const CORR_D = 1.22;    // Corridor depth
 
-const MR_W = 2.71;    // Maid's Room width
-const MR_D = 2.71;    // Maid's Room depth
-const KIT_W = 3.31;   // Kitchen width
-const KIT_D = 4.12;   // Kitchen depth
+const REC_W = 11.72;    // Reception width (= apartment width)
+const REC_LEFT_D = 5.78; // Reception depth on left side
+const REC_RIGHT_D = 3.93; // Reception depth on right side
 
-const ROOM_D = 1.98;  // Depth of toilet rooms (north-south)
-const CORR_D = 1.22;  // Corridor depth (north-south)
-const APT_DEPTH = 11.72; // Total apartment depth (west wall, north to south)
+// Stair width: calculated so top row fits within 11.72m
+// NOTCH_W + STAIR_W + INT + GT + INT + MB + INT + MR + INT + KIT = 11.72
+// 0.50 + S + 4*0.10 + 1.22 + 1.22 + 1.98 + 3.31 = 11.72
+// S = 11.72 - 0.50 - 0.40 - 7.73 = 3.09
+const STAIR_W = REC_W - NOTCH_W - 4 * INT_WALL - GT_W - MB_W - MR_W - KIT_W;
+// ≈ 3.09m
 
-// ── Top-left notch ──
-// The "C" area at the top-left is OUTSIDE the apartment.
-// The notch is approximately the width of half the stair area
-// and about 1.5m tall. The apartment's NW corner is indented.
-const NOTCH_W = 1.5;  // How far the notch extends to the right from x=0
-const NOTCH_H = 1.8;  // How far the notch extends down from z=0
+// ============================================================
+// DERIVED X-COORDINATES (left to right)
+// ============================================================
+// Notch: x=0 to x=NOTCH_W (outside apartment at NW corner)
+const S_X0 = NOTCH_W;                                          // stairs left edge
+const S_X1 = S_X0 + STAIR_W;                                   // stairs right edge
 
-// ── X coordinates of room boundaries ──
-const S_X0 = 0;                                               // Stairs left (west wall)
-const S_X1 = STAIR_W;                                         // ≈3.04 Stairs right
+const GT_X0 = S_X1 + INT_WALL;                                 // GT left
+const GT_X1 = GT_X0 + GT_W;                                    // GT right
 
-const GT_X0 = S_X1 + INT_WALL;                                // ≈3.19 Guest Toilet left
-const GT_X1 = GT_X0 + GT_W;                                   // ≈4.41 Guest Toilet right
+const MB_X0 = GT_X1 + INT_WALL;                                // MB left
+const MB_X1 = MB_X0 + MB_W;                                    // MB right
 
-const MB_X0 = GT_X1 + INT_WALL;                               // ≈4.56 Maid's Bathroom left
-const MB_X1 = MB_X0 + MB_W;                                   // =5.78 Maid's Bathroom right ✓
+const MR_X0 = MB_X1 + INT_WALL;                                // MR left
+const MR_X1 = MR_X0 + MR_W;                                    // MR right
 
-const MR_X0 = MB_X1 + INT_WALL;                               // ≈5.93 Maid's Room left
-const MR_X1 = MR_X0 + MR_W;                                   // ≈8.64 Maid's Room right
+const K_X0 = MR_X1 + INT_WALL;                                 // Kitchen left
+const K_X1 = K_X0 + KIT_W;                                     // Kitchen right ≈ 11.72
 
-const K_X0 = MR_X1 + INT_WALL;                                // ≈8.79 Kitchen left
-const K_X1 = K_X0 + KIT_W;                                    // ≈12.10 Kitchen right
+// ============================================================
+// DERIVED Z-COORDINATES (top to bottom)
+// ============================================================
+// All rooms start at z=0 (north wall)
+const ROOMS_Z0 = 0;
 
-// ── Z coordinates ──
-const ROOMS_Z0 = 0;                                           // North wall
-const ROOMS_Z1 = ROOM_D;                                      // =1.98 Bottom of toilets
-const CORR_Z0 = ROOMS_Z1 + INT_WALL;                          // ≈2.13 Corridor top
-const CORR_Z1 = CORR_Z0 + CORR_D;                             // ≈3.35 Corridor bottom
+// GT & MB bottom
+const GT_Z1 = ROOM_D;                                          // = 1.98
+const MB_Z1 = ROOM_D;                                          // = 1.98
 
-// Maid's room: from z=0 to z=MR_D (2.71)
-const MR_Z1 = MR_D;                                           // =2.71
+// Stairs bottom (same depth as GT/MB since on same row)
+const S_Z1 = ROOM_D;                                           // = 1.98
 
-// Kitchen: from z=0 to z=KIT_D (4.12) — extends further south
-const K_Z1 = KIT_D;                                           // =4.12
+// Wall below GT/MB
+const WALL_BELOW_ROOMS = GT_Z1 + INT_WALL;                     // = 2.08
 
-// Stairs: from z=NOTCH_H (below the notch) to corridor bottom
-// The stairs are open to the reception below
-const S_Z0 = NOTCH_H;                                         // ≈1.8 (below the notch)
-const S_Z1 = CORR_Z1;                                         // ≈3.35
+// Maid's Room bottom
+const MR_Z1 = MR_D;                                            // = 2.71
 
-// The reception's east wall (partition) is at x = MR_X1
-// This wall only exists from CORR_Z1 downward
-const PART_X = MR_X1;                                         // ≈8.64
+// Corridor: from MR bottom to corridor bottom
+// Corridor top = MR_Z1 = 2.71
+const CORR_Z0 = MR_Z1;                                         // = 2.71
+const CORR_Z1 = CORR_Z0 + CORR_D;                              // = 3.93
+
+// Kitchen bottom
+const K_Z1 = KIT_D;                                            // = 4.12
+
+// Apartment depth: reception left starts at WALL_BELOW_ROOMS, depth = 5.78
+const APT_DEPTH = WALL_BELOW_ROOMS + REC_LEFT_D;               // = 2.08 + 5.78 = 7.86
+// Verify: reception right starts at CORR_Z1 = 3.93, depth = 3.93 → 3.93 + 3.93 = 7.86 ✓
 
 // ============================================================
 // COLORS
@@ -174,91 +184,75 @@ export interface DimensionLine {
 // ROOMS
 // ============================================================
 export const rooms: Room[] = [
-  // Reception: large open space
-  // The reception is OPEN to the stairs (no wall between them)
-  // It extends from the west wall to PART_X (east wall of Maid's Room)
-  // The reception also includes the stair area (open plan)
-  // Shape: The reception is the full width below the corridor,
-  // plus the stair area above the corridor (since stairs are open)
+  // Reception: step-shaped, full width at bottom, narrower at top
+  // Left side: from z=WALL_BELOW_ROOMS to z=APT_DEPTH (5.78m)
+  // Right side: from z=CORR_Z1 to z=APT_DEPTH (3.93m)
+  // Below kitchen (z=K_Z1 to APT_DEPTH): full width 11.72m
+  // Between z=CORR_Z1 and z=K_Z1: from x=0 to x=K_X0 (left of kitchen)
+  // Between z=WALL_BELOW_ROOMS and z=CORR_Z1: from x=0 to x=MR_X0 (left of corridor)
   {
     name: "Reception",
     vertices: [
-      [S_X0, S_Z0],                   // Top of stairs (below notch)
-      [S_X1, S_Z0],                   // Stairs right edge at top (where wall to GT starts)
-      [S_X1, CORR_Z1],               // Stairs right edge at corridor bottom
-      [PART_X, CORR_Z1],             // East wall starts at corridor bottom
-      [PART_X, APT_DEPTH],           // SE corner of reception
-      [S_X0, APT_DEPTH],             // SW corner
+      [0, WALL_BELOW_ROOMS],         // NW of reception (left side, below GT/MB)
+      [MR_X0, WALL_BELOW_ROOMS],     // where corridor starts (right edge of open area)
+      [MR_X0, CORR_Z1],             // corridor bottom, left side
+      [K_X1, CORR_Z1],              // corridor bottom, right side (kitchen east)
+      [K_X1, APT_DEPTH],            // SE corner
+      [0, APT_DEPTH],               // SW corner
     ],
     color: COLORS.reception,
-    labelPosition: [PART_X / 2, (CORR_Z1 + APT_DEPTH) / 2],
-    dimensions: `${PART_X.toFixed(1)}m × ${(APT_DEPTH - CORR_Z1).toFixed(1)}m`,
+    labelPosition: [REC_W / 3, (CORR_Z1 + APT_DEPTH) / 2],
+    dimensions: `${REC_W}m wide`,
   },
 
   // Stairs (U-shaped, open to reception on the south side)
-  // The stairs sit below the notch, from z=NOTCH_H to z=CORR_Z1
   {
     name: "Stairs",
     vertices: [
-      [S_X0, S_Z0],
-      [S_X1, S_Z0],
+      [S_X0, ROOMS_Z0],
+      [S_X1, ROOMS_Z0],
       [S_X1, S_Z1],
       [S_X0, S_Z1],
     ],
     color: COLORS.stairs,
-    labelPosition: [S_X1 / 2, (S_Z0 + S_Z1) / 2],
-    dimensions: `${STAIR_W.toFixed(2)}m × ${(S_Z1 - S_Z0).toFixed(2)}m`,
+    labelPosition: [(S_X0 + S_X1) / 2, S_Z1 / 2],
+    dimensions: "U-Shaped",
   },
 
-  // Guest Toilet (to the RIGHT of stairs)
+  // Guest Toilet
   {
     name: "Guest Toilet",
     vertices: [
       [GT_X0, ROOMS_Z0],
       [GT_X1, ROOMS_Z0],
-      [GT_X1, ROOMS_Z1],
-      [GT_X0, ROOMS_Z1],
+      [GT_X1, GT_Z1],
+      [GT_X0, GT_Z1],
     ],
     color: COLORS.guestToilet,
-    labelPosition: [(GT_X0 + GT_X1) / 2, ROOMS_Z1 / 2],
+    labelPosition: [(GT_X0 + GT_X1) / 2, GT_Z1 / 2],
     dimensions: `${GT_W}m × ${ROOM_D}m`,
   },
 
-  // Maid's Bathroom (to the RIGHT of Guest Toilet)
+  // Maid's Bathroom
   {
     name: "Maid's Bathroom",
     vertices: [
       [MB_X0, ROOMS_Z0],
       [MB_X1, ROOMS_Z0],
-      [MB_X1, ROOMS_Z1],
-      [MB_X0, ROOMS_Z1],
+      [MB_X1, MB_Z1],
+      [MB_X0, MB_Z1],
     ],
     color: COLORS.maidsBathroom,
-    labelPosition: [(MB_X0 + MB_X1) / 2, ROOMS_Z1 / 2],
+    labelPosition: [(MB_X0 + MB_X1) / 2, MB_Z1 / 2],
     dimensions: `${MB_W}m × ${ROOM_D}m`,
   },
 
-  // Corridor: runs east-west between room row and reception
-  // From stairs right edge to the Maid's Room right edge
-  {
-    name: "Corridor",
-    vertices: [
-      [S_X1, CORR_Z0],
-      [MR_X1, CORR_Z0],
-      [MR_X1, CORR_Z1],
-      [S_X1, CORR_Z1],
-    ],
-    color: COLORS.corridor,
-    labelPosition: [(S_X1 + MR_X1) / 2, (CORR_Z0 + CORR_Z1) / 2],
-    dimensions: `${CORR_D}m deep`,
-  },
-
-  // Maid's Room (to the RIGHT of Maid's Bathroom)
+  // Maid's Room (entrance from Maid's Bathroom, deeper than GT/MB)
   {
     name: "Maid's Room",
     vertices: [
-      [MR_X0, 0],
-      [MR_X1, 0],
+      [MR_X0, ROOMS_Z0],
+      [MR_X1, ROOMS_Z0],
       [MR_X1, MR_Z1],
       [MR_X0, MR_Z1],
     ],
@@ -267,12 +261,27 @@ export const rooms: Room[] = [
     dimensions: `${MR_W}m × ${MR_D}m`,
   },
 
-  // Kitchen (to the RIGHT of Maid's Room, extends further SOUTH)
+  // Corridor: runs from Kitchen west wall to Maid's Room west wall
+  // Positioned below MR and Kitchen, above reception
+  {
+    name: "Corridor",
+    vertices: [
+      [MR_X0, CORR_Z0],
+      [K_X1, CORR_Z0],
+      [K_X1, CORR_Z1],
+      [MR_X0, CORR_Z1],
+    ],
+    color: COLORS.corridor,
+    labelPosition: [(MR_X0 + K_X1) / 2, (CORR_Z0 + CORR_Z1) / 2],
+    dimensions: `${CORR_D}m deep`,
+  },
+
+  // Kitchen (extends further south to z=4.12, into garden area)
   {
     name: "Kitchen",
     vertices: [
-      [K_X0, 0],
-      [K_X1, 0],
+      [K_X0, ROOMS_Z0],
+      [K_X1, ROOMS_Z0],
       [K_X1, K_Z1],
       [K_X0, K_Z1],
     ],
@@ -281,20 +290,19 @@ export const rooms: Room[] = [
     dimensions: `${KIT_W}m × ${KIT_D}m`,
   },
 
-  // Garden (L-shaped: south of apartment + east of kitchen)
+  // Garden (L-shaped: south of apartment + east of kitchen extension)
   {
     name: "Garden",
     vertices: [
-      [S_X0, APT_DEPTH],                  // apartment SW corner
-      [PART_X, APT_DEPTH],                // apartment SE corner (reception)
-      [PART_X, K_Z1],                     // step east at kitchen south level
-      [K_X1, K_Z1],                       // kitchen SE corner
-      [K_X1 + 4, K_Z1],                   // garden extends east
-      [K_X1 + 4, APT_DEPTH + 4],          // garden SE corner
-      [S_X0, APT_DEPTH + 4],              // garden SW corner
+      [0, APT_DEPTH],                    // apartment SW corner
+      [K_X1, APT_DEPTH],                 // apartment SE corner
+      [K_X1, K_Z1],                      // kitchen SE corner
+      [K_X1 + 4, K_Z1],                  // garden extends east
+      [K_X1 + 4, APT_DEPTH + 4],         // garden SE corner
+      [0, APT_DEPTH + 4],                // garden SW corner
     ],
     color: COLORS.garden,
-    labelPosition: [K_X1 + 1.5, (K_Z1 + APT_DEPTH + 4) / 2],
+    labelPosition: [(K_X1 + K_X1 + 4) / 2, (K_Z1 + APT_DEPTH + 4) / 2],
     dimensions: "Garden",
   },
 ];
@@ -304,22 +312,20 @@ export const rooms: Room[] = [
 // ============================================================
 export const receptionVoid = {
   x: 0.30,
-  z: APT_DEPTH - 5.0,
+  z: (CORR_Z1 + APT_DEPTH) / 2 - 1.75,
   width: 5.15,
   depth: 3.5,
 };
 
 export const internalStairs = {
   x: S_X0,
-  z: S_Z0,
+  z: ROOMS_Z0,
   width: STAIR_W,
-  depth: S_Z1 - S_Z0,
+  depth: S_Z1 - ROOMS_Z0,
   stepCount: 16,
   isUShape: true,
-  // U-shape: left flight goes north (up), landing at top, right flight comes south (down)
-  // Open at the south side (facing reception)
-  leftFlightWidth: (STAIR_W - 0.15) / 2,  // half width minus central wall
-  landingDepth: 1.0,
+  leftFlightWidth: (STAIR_W - 0.10) / 2,
+  landingDepth: 0.6,
 };
 
 // ============================================================
@@ -328,47 +334,30 @@ export const internalStairs = {
 export const walls: WallSegment[] = [
   // ═══ EXTERIOR WALLS ═══
 
-  // North wall: from the notch corner to the kitchen east wall
-  // The north wall starts at (NOTCH_W, 0) because the top-left is notched out
-  // Actually, looking at the plan: the north wall runs across the TOP of all rooms
-  // The stairs extend from z=NOTCH_H, so above the stairs (z=0 to NOTCH_H) is the notch
-  // The north wall at z=0 runs from x=S_X1 (right edge of stairs) to K_X1
-  // The stairs' north wall is at z=NOTCH_H, from x=0 to x=S_X1
-  
-  // North wall above rooms (from stairs right edge to kitchen right edge)
-  { start: [S_X1, 0], end: [K_X1, 0], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
-  
-  // Stairs north wall (at z=NOTCH_H, from x=0 to stairs right edge)
-  { start: [0, NOTCH_H], end: [S_X1, NOTCH_H], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
-  
-  // Notch: vertical wall connecting stairs north wall to rooms north wall
-  // From (S_X1, NOTCH_H) up to (S_X1, 0) — but S_X1 already has the interior wall
-  // Actually the step is: from (S_X1, 0) the north wall goes right, and from (0, NOTCH_H) goes right to S_X1
-  // The vertical connection is at x=S_X1 from z=0 to z=NOTCH_H — this is part of the stair/GT wall
-  // We need a short exterior wall segment from (S_X1, 0) to (S_X1, NOTCH_H) on the exterior side
-  { start: [S_X1, 0], end: [S_X1, NOTCH_H], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // North wall: from notch step to kitchen east wall
+  { start: [NOTCH_W, 0], end: [K_X1, 0], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
-  // West wall: from notch corner down to apartment south wall
+  // Notch step walls (NW corner cutout)
+  // Vertical: from (NOTCH_W, 0) south to (NOTCH_W, NOTCH_H)
+  { start: [NOTCH_W, 0], end: [NOTCH_W, NOTCH_H], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // Horizontal: from (NOTCH_W, NOTCH_H) west to (0, NOTCH_H)
+  { start: [0, NOTCH_H], end: [NOTCH_W, NOTCH_H], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+
+  // West wall: from notch bottom to apartment south wall
   { start: [0, NOTCH_H], end: [0, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
-  // South wall of reception (apartment south wall)
-  { start: [0, APT_DEPTH], end: [PART_X, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // South wall: full width
+  { start: [0, APT_DEPTH], end: [K_X1, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
-  // East wall of reception: from corridor bottom down to apartment south
-  { start: [PART_X, CORR_Z1], end: [PART_X, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // East wall: from north to kitchen south (z=4.12)
+  { start: [K_X1, 0], end: [K_X1, K_Z1], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
-  // Connection wall from reception east wall to kitchen at corridor level
-  // This is the horizontal wall from PART_X to K_X0 at z=CORR_Z1
-  { start: [PART_X, CORR_Z1], end: [K_X0, CORR_Z1], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
-
-  // Kitchen west wall: from corridor bottom down to kitchen south
-  { start: [K_X0, CORR_Z1], end: [K_X0, K_Z1], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
-
-  // Kitchen south wall
+  // Kitchen south wall (exterior, faces garden)
   { start: [K_X0, K_Z1], end: [K_X1, K_Z1], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
-  // Kitchen east wall
-  { start: [K_X1, 0], end: [K_X1, K_Z1], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // East wall below kitchen: from kitchen south to apartment south
+  // This is the reception's east wall on the right side
+  { start: [K_X1, K_Z1], end: [K_X1, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
   // ═══ GARDEN BOUNDARY (low walls) ═══
   { start: [0, APT_DEPTH], end: [0, APT_DEPTH + 4], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
@@ -378,71 +367,73 @@ export const walls: WallSegment[] = [
 
   // ═══ INTERIOR WALLS ═══
 
-  // Wall between Stairs and Guest Toilet (vertical, north to south)
-  // From north wall (z=0) down to bottom of toilet rooms (z=ROOMS_Z1)
-  // Note: the exterior step wall at x=S_X1 from z=0 to z=NOTCH_H handles the notch
-  // This interior wall runs from z=0 to z=ROOMS_Z1
-  { start: [S_X1, 0], end: [S_X1, ROOMS_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Wall between Stairs and Guest Toilet (vertical)
+  { start: [S_X1, 0], end: [S_X1, S_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
   // Wall between Guest Toilet and Maid's Bathroom (vertical)
-  { start: [GT_X1, 0], end: [GT_X1, ROOMS_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  { start: [GT_X1, 0], end: [GT_X1, GT_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
   // Wall between Maid's Bathroom and Maid's Room (vertical)
+  // This wall runs from z=0 to z=MR_Z1 (full room depth)
   { start: [MB_X1, 0], end: [MB_X1, MR_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Wall between Maid's Room and Kitchen (vertical)
-  { start: [MR_X1, 0], end: [MR_X1, CORR_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Wall between Maid's Room and Kitchen (vertical, from z=0 to z=K_Z1)
+  { start: [MR_X1, 0], end: [MR_X1, K_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Bottom wall of toilets (horizontal) — from GT left to MB right
-  { start: [GT_X0, ROOMS_Z1], end: [MB_X1, ROOMS_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Bottom wall of GT and MB (horizontal) — separates rooms from reception below
+  { start: [S_X0, GT_Z1], end: [MB_X1, GT_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Bottom wall of Maid's Room (horizontal)
+  // Bottom wall of Maid's Room (horizontal) = top of corridor
   { start: [MR_X0, MR_Z1], end: [MR_X1, MR_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Corridor bottom wall (horizontal) — from stairs right edge to Maid's Room right edge
-  // This separates the corridor from the reception below
-  { start: [S_X1, CORR_Z1], end: [MR_X1, CORR_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Corridor bottom wall (horizontal) — from MR left to Kitchen right
+  // This separates corridor from reception below
+  { start: [MR_X0, CORR_Z1], end: [K_X1, CORR_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Stairs right wall: from toilet bottom to corridor bottom
-  // (connecting the toilet bottom wall to the corridor bottom wall)
-  { start: [S_X1, ROOMS_Z1], end: [S_X1, CORR_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Kitchen west wall below corridor (from corridor bottom to kitchen south)
+  // This separates kitchen from reception on the left
+  { start: [K_X0, CORR_Z1], end: [K_X0, K_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+
+  // Stairs bottom wall: connects stairs to GT bottom wall
+  // The stairs' south side is open to reception, but the east wall of stairs
+  // connects to the GT bottom wall
+  { start: [S_X0, S_Z1], end: [S_X1, S_Z1], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 ];
 
 // ============================================================
 // DOORS
 // ============================================================
 export const doors: DoorOpening[] = [
-  // Entrance: on the west wall, near the stairs area
-  // The entrance is below the notch, around z=2.0 to z=3.0
+  // Entrance: on the west wall, below the notch
   {
-    position: [0, (NOTCH_H + CORR_Z1) / 2],
+    position: [0, (NOTCH_H + S_Z1) / 2],
     width: 1.0,
     height: DOOR_HEIGHT,
     wallDirection: "z",
     label: "Entrance",
   },
-  // Guest Toilet door (from corridor, through bottom wall of GT)
+  // Guest Toilet door (from the area below, through bottom wall of GT)
   {
-    position: [(GT_X0 + GT_X1) / 2, ROOMS_Z1],
+    position: [(GT_X0 + GT_X1) / 2, GT_Z1],
     width: 0.7,
     height: DOOR_HEIGHT,
     wallDirection: "x",
   },
-  // Maid's Bathroom door (from corridor, through bottom wall)
+  // Maid's Bathroom door (from the area below, through bottom wall)
   {
-    position: [(MB_X0 + MB_X1) / 2, ROOMS_Z1],
+    position: [(MB_X0 + MB_X1) / 2, MB_Z1],
     width: 0.7,
     height: DOOR_HEIGHT,
     wallDirection: "x",
   },
-  // Maid's Room door (from corridor, through bottom wall)
+  // Maid's Room door: entrance from Maid's Bathroom (through the wall between MB and MR)
   {
-    position: [(MR_X0 + MR_X1) / 2, MR_Z1],
-    width: 0.9,
+    position: [MB_X1, (ROOMS_Z0 + Math.min(MB_Z1, MR_Z1)) / 2],
+    width: 0.8,
     height: DOOR_HEIGHT,
-    wallDirection: "x",
+    wallDirection: "z",
   },
-  // Kitchen door (from corridor area, through the wall between MR and Kitchen)
+  // Kitchen door (from corridor, through the wall between MR and Kitchen)
   {
     position: [MR_X1, (CORR_Z0 + CORR_Z1) / 2],
     width: 0.9,
@@ -451,7 +442,7 @@ export const doors: DoorOpening[] = [
   },
   // Garden sliding door (south wall of reception)
   {
-    position: [PART_X / 2, APT_DEPTH],
+    position: [K_X1 / 3, APT_DEPTH],
     width: 2.0,
     height: DOOR_HEIGHT,
     wallDirection: "x",
@@ -463,16 +454,16 @@ export const doors: DoorOpening[] = [
 // WINDOWS
 // ============================================================
 export const windows: WindowOpening[] = [
-  // West wall windows (reception) — two windows
+  // West wall windows (reception area)
   {
-    position: [0, 5.0],
+    position: [0, (WALL_BELOW_ROOMS + APT_DEPTH) / 3],
     width: 1.5,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
   {
-    position: [0, 9.0],
+    position: [0, (WALL_BELOW_ROOMS + APT_DEPTH) * 2 / 3],
     width: 1.5,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
@@ -480,7 +471,7 @@ export const windows: WindowOpening[] = [
   },
   // Kitchen east wall window
   {
-    position: [K_X1, K_Z1 / 2],
+    position: [K_X1, KIT_D / 2],
     width: 1.2,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
@@ -500,31 +491,31 @@ export const windows: WindowOpening[] = [
 // DIMENSION LINES
 // ============================================================
 export const dimensionLines: DimensionLine[] = [
-  // 5.78m: total width from west wall to right edge of Maid's Bathroom
-  // This includes: stairs (3.04) + wall (0.15) + GT (1.22) + wall (0.15) + MB (1.22) = 5.78
-  { start: [0, NOTCH_H], end: [MB_X1, NOTCH_H], label: "5.78m", offset: -0.6 },
-  // 11.72m: total apartment depth (west wall)
-  { start: [0, NOTCH_H], end: [0, APT_DEPTH], label: "11.72m", offset: -1.0 },
-  // 1.22m: GT width
-  { start: [GT_X0, 0], end: [GT_X1, 0], label: "1.22m", offset: -0.4 },
-  // 1.22m: MB width
-  { start: [MB_X0, 0], end: [MB_X1, 0], label: "1.22m", offset: -0.4 },
-  // 1.98m: toilet depth
-  { start: [MB_X1, 0], end: [MB_X1, ROOMS_Z1], label: "1.98m", offset: 0.5 },
-  // 2.71m: maid's room width
-  { start: [MR_X0, 0], end: [MR_X1, 0], label: "2.71m", offset: -0.4 },
-  // 2.71m: maid's room depth
-  { start: [MR_X1, 0], end: [MR_X1, MR_Z1], label: "2.71m", offset: 0.5 },
-  // 3.31m: kitchen width
-  { start: [K_X0, 0], end: [K_X1, 0], label: "3.31m", offset: -0.4 },
-  // 4.12m: kitchen depth
-  { start: [K_X1, 0], end: [K_X1, K_Z1], label: "4.12m", offset: 0.5 },
-  // 1.22m: corridor depth
-  { start: [S_X1, CORR_Z0], end: [S_X1, CORR_Z1], label: "1.22m", offset: -0.4 },
-  // 5.15m: void width
+  // Top row room widths
+  { start: [GT_X0, 0], end: [GT_X1, 0], label: `${GT_W}m`, offset: -0.4 },
+  { start: [MB_X0, 0], end: [MB_X1, 0], label: `${MB_W}m`, offset: -0.4 },
+  { start: [MR_X0, 0], end: [MR_X1, 0], label: `${MR_W}m`, offset: -0.4 },
+  { start: [K_X0, 0], end: [K_X1, 0], label: `${KIT_W}m`, offset: -0.4 },
+
+  // Room depths (right side)
+  { start: [MB_X1, 0], end: [MB_X1, GT_Z1], label: `${ROOM_D}m`, offset: 0.4 },
+  { start: [MR_X1, 0], end: [MR_X1, MR_Z1], label: `${MR_D}m`, offset: 0.4 },
+  { start: [K_X1, 0], end: [K_X1, K_Z1], label: `${KIT_D}m`, offset: 0.5 },
+
+  // Corridor depth
+  { start: [MR_X0, CORR_Z0], end: [MR_X0, CORR_Z1], label: `${CORR_D}m`, offset: -0.4 },
+
+  // Reception dimensions
+  // Left depth: 5.78m
+  { start: [0, WALL_BELOW_ROOMS], end: [0, APT_DEPTH], label: `${REC_LEFT_D}m`, offset: -0.8 },
+  // Right depth: 3.93m
+  { start: [K_X1, CORR_Z1], end: [K_X1, APT_DEPTH], label: `${REC_RIGHT_D}m`, offset: 0.8 },
+  // Width: 11.72m
+  { start: [0, APT_DEPTH], end: [K_X1, APT_DEPTH], label: `${REC_W}m`, offset: 0.6 },
+
+  // Void dimensions
   { start: [receptionVoid.x, receptionVoid.z], end: [receptionVoid.x + receptionVoid.width, receptionVoid.z], label: "5.15m", offset: -0.3 },
-  // 3.93m: dining area
-  { start: [1.0, APT_DEPTH - 3.0], end: [1.0 + 3.93, APT_DEPTH - 3.0], label: "3.93m", offset: 0.4 },
+  { start: [1.0, APT_DEPTH - 2.5], end: [1.0 + 3.93, APT_DEPTH - 2.5], label: "3.93m", offset: 0.4 },
 ];
 
 // ============================================================
@@ -537,14 +528,22 @@ export const propertyBounds = {
   maxZ: APT_DEPTH + 5,
 };
 
-// Export computed values for use in renderers
+// Export computed values for renderers
 export const APT_DIMS = {
-  topWidth: K_X1,        // full width at top (including kitchen)
-  recWidth: PART_X,      // reception width (narrower)
-  depth: APT_DEPTH,      // total depth
-  kitchenBottom: K_Z1,   // how far south the kitchen extends
-  corridorBottom: CORR_Z1, // corridor bottom z
-  notchW: NOTCH_W,       // notch width
-  notchH: NOTCH_H,       // notch height
-  stairTop: S_Z0,        // top of stairs (below notch)
+  topWidth: K_X1,
+  recWidth: REC_W,
+  depth: APT_DEPTH,
+  kitchenBottom: K_Z1,
+  corridorBottom: CORR_Z1,
+  corridorTop: CORR_Z0,
+  notchW: NOTCH_W,
+  notchH: NOTCH_H,
+  stairLeft: S_X0,
+  stairRight: S_X1,
+  stairBottom: S_Z1,
+  roomsBottom: GT_Z1,
+  mrLeft: MR_X0,
+  mrRight: MR_X1,
+  kitLeft: K_X0,
+  kitRight: K_X1,
 };
