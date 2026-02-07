@@ -557,6 +557,16 @@ export const dimensionLines: DimensionLine[] = [
 
   // ═══ NOTCH WIDTH (horizontal, below notch) ═══
   { start: [0, NOTCH_H], end: [NOTCH_W, NOTCH_H], label: `${NOTCH_W}m`, offset: 0.3 },
+
+  // ═══ GARDEN DIMENSIONS ═══
+  // South garden strip width (horizontal, below south garden wall)
+  { start: [0, APT_DEPTH + 3], end: [K_X1 + 3, APT_DEPTH + 3], label: `${(K_X1 + 3).toFixed(2)}m`, offset: 0.4 },
+  // South garden strip depth (vertical, left side)
+  { start: [0, APT_DEPTH], end: [0, APT_DEPTH + 3], label: "3m", offset: -0.5 },
+  // East garden strip width (horizontal, at top of east strip)
+  { start: [K_X1, ROOMS_Z0], end: [K_X1 + 3, ROOMS_Z0], label: "3m", offset: -0.4 },
+  // East garden strip full height (vertical, right side)
+  { start: [K_X1 + 3, ROOMS_Z0], end: [K_X1 + 3, APT_DEPTH + 3], label: `${(APT_DEPTH + 3).toFixed(2)}m`, offset: 0.5 },
 ];
 
 // ============================================================
