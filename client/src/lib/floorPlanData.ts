@@ -388,11 +388,10 @@ export const walls: WallSegment[] = [
 // DOORS
 // ============================================================
 export const doors: DoorOpening[] = [
-  // 1. Entrance door: on the west wall, below the notch
-  //    Arc swings inward (east) into the space below the stairs
-  //    Shifted lower on the west wall
+  // 1. Entrance door: on the west wall, well below the notch
+  //    Arc swings inward (east) into the reception area
   {
-    position: [0, NOTCH_H + 0.60],
+    position: [0, NOTCH_H + 1.20],
     width: 1.0,
     height: DOOR_HEIGHT,
     wallDirection: "z",
@@ -408,9 +407,25 @@ export const doors: DoorOpening[] = [
     wallDirection: "x",
   },
 
-  // 3. (REMOVED: Maid's Bathroom has no door to reception)
+  // 3. Maid's Room door from corridor: on MR's south wall (z=MR_Z1)
+  //    Arc swings north into the Maid's Room
+  {
+    position: [(MR_X0 + MR_X1) / 2, MR_Z1],
+    width: 0.80,
+    height: DOOR_HEIGHT,
+    wallDirection: "x",
+  },
 
-  // 4. Maid's Room door: on the wall between MB and MR (x=MB_X1)
+  // 4. Corridor entrance: on the corridor's west wall (x=MR_X0)
+  //    Opening from reception into the corridor
+  {
+    position: [MR_X0, (CORR_Z0 + CORR_Z1) / 2],
+    width: 0.90,
+    height: DOOR_HEIGHT,
+    wallDirection: "z",
+  },
+
+  // 5. Maid's Room door: on the wall between MB and MR (x=MB_X1)
   //    Entrance from Maid's Bathroom, arc swings east into MR
   //    Positioned near the north end of the shared wall
   {
@@ -420,7 +435,7 @@ export const doors: DoorOpening[] = [
     wallDirection: "z",
   },
 
-  // 5. Kitchen door: from corridor through MR/Kitchen wall (x=MR_X1)
+  // 6. Kitchen door: from corridor through MR/Kitchen wall (x=MR_X1)
   //    Arc swings east into the kitchen
   {
     position: [MR_X1, (CORR_Z0 + CORR_Z1) / 2],
@@ -429,7 +444,7 @@ export const doors: DoorOpening[] = [
     wallDirection: "z",
   },
 
-  // 6. Garden sliding door: on the south wall of reception (z=APT_DEPTH)
+  // 7. Garden sliding door: on the south wall of reception (z=APT_DEPTH)
   //    Wide sliding glass door leading to the garden
   {
     position: [4.5, APT_DEPTH],
@@ -542,11 +557,13 @@ export const dimensionLines: DimensionLine[] = [
   // ═══ CORRIDOR DEPTH (vertical, left of corridor) ═══
   { start: [MR_X0, CORR_Z0], end: [MR_X0, CORR_Z1], label: `${CORR_D}m`, offset: -0.4 },
 
-  // ═══ RECEPTION DEPTHS (vertical) ═══
-  // Left side: from top of reception (WALL_BELOW_ROOMS) to south wall (APT_DEPTH)
-  { start: [0, WALL_BELOW_ROOMS], end: [0, APT_DEPTH], label: `${REC_LEFT_D}m`, offset: -0.8 },
-  // Right side: from corridor bottom (CORR_Z1) to south wall (APT_DEPTH)
-  { start: [REC_EAST, CORR_Z1], end: [REC_EAST, APT_DEPTH], label: `${REC_RIGHT_D}m`, offset: 0.8 },
+  // ═══ RECEPTION DIMENSIONS ═══
+  // Left depth: from stairs bottom (S_Z1) to south wall (APT_DEPTH)
+  { start: [S_X0, S_Z1], end: [S_X0, APT_DEPTH], label: `${REC_LEFT_D}m`, offset: -0.8 },
+  // Right depth: from corridor bottom (CORR_Z1) to south wall (APT_DEPTH)
+  { start: [K_X0, CORR_Z1], end: [K_X0, APT_DEPTH], label: `${REC_RIGHT_D}m`, offset: 0.5 },
+  // Reception width: horizontal, inside the reception area
+  { start: [0, APT_DEPTH - 0.5], end: [REC_EAST, APT_DEPTH - 0.5], label: "11.72m", offset: 0.3 },
 
   // ═══ NOTCH WIDTH (horizontal, below notch) ═══
   { start: [0, NOTCH_H], end: [NOTCH_W, NOTCH_H], label: `${NOTCH_W}m`, offset: 0.3 },
