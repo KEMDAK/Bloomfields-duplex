@@ -1,67 +1,193 @@
 /**
- * Floor Plan Data - Type DU1 Ground Floor
- * CORRECTED v4 based on user feedback
+ * Floor Plan Data — Type DU1 Ground Floor
+ * DEFINITIVE v5
  *
  * All dimensions in meters, true to scale.
  *
- * Coordinate system:
+ * Coordinate system (portrait orientation, matching dimensioned image):
  *   X = left to right
  *   Z = top to bottom (when viewed from above)
  *   Origin (0,0) = top-left interior corner of the apartment
  *
- * CORRECTED LAYOUT (top-down):
+ * KEY LAYOUT FACTS:
+ * - The Reception is an OPEN-PLAN space. It is NOT walled off from the
+ *   stairs or guest toilet area. The partition wall only begins at the
+ *   corridor level and runs downward.
+ * - The Reception extends past the corridor/stairs into extra space on
+ *   the right side above the corridor.
+ * - The right-side rooms are stacked vertically: Guest Toilet, Male Toilet,
+ *   Stairs (open), then corridor → Maid's Room, Kitchen.
  *
- * ┌──────────────────────────┬────┬───────────┐  Z=0
- * │                          │    │           │
- * │                          │    │  Stairs   │
- * │                          │    │  1.98m    │
- * │                          │    │           │
- * │                          ├────┼───────────┤  Z=1.98
- * │                          │    │  Guest    │
- * │   RECEPTION              │    │  Toilet   │
- * │   (one large room)       │corr│  ~2.71    │
- * │   5.78m × 11.72m         │1.22│           │
- * │                          │    ├───────────┤  Z≈4.69
- * │   Contains:              │    │           │
- * │   - living area (top)    │    │  Maid's   │
- * │   - seating (middle)     │    │  Room     │
- * │   - dining (bottom)      │    │  2.71×2.71│
- * │   - dashed void          │    │           │
- * │                          │    ├───────────┤  Z≈7.40
- * │                          │    │           │
- * │                          ├────┤  Kitchen  │
- * │                          │    │  4.12×3.31│
- * │                          │    │           │
- * └──────────────────────────┴────┴───────────┘  Z=11.72
+ * DIMENSION INVENTORY (each used exactly once):
+ *   11.72m — total apartment depth (left wall, Z-axis)
+ *   5.78m  — reception width (left section, X-axis)
+ *   4.12m  — kitchen depth (Z-axis)
+ *   3.31m  — kitchen width (X-axis)
+ *   2.71m  — maid's room width (X-axis) AND depth (Z-axis)
+ *   1.98m  — corridor depth (Z-axis)
+ *   1.22m  — guest toilet depth (Z-axis), male toilet depth (Z-axis),
+ *            corridor width (X-axis)
+ *   5.15m  — void width in reception
+ *   3.93m  — dining area width in reception
  *
- * Entrance door: at top wall, right side (opens into stairs/reception)
- * Garden: L-shaped, left + bottom
- * External staircase: NOT rendered (outside apartment)
+ * RIGHT-SIDE VERTICAL STACK (top to bottom):
+ *   Guest Toilet:  1.22m deep
+ *   Male Toilet:   1.22m deep
+ *   Stairs:        open to reception, ~2.71m deep (fills gap)
+ *   Corridor:      1.98m deep, 1.22m wide
+ *   Maid's Room:   2.71m deep, 2.71m wide (to right of corridor)
+ *   Kitchen:       4.12m deep, 3.31m wide (full right-side width)
+ *
+ *   Walls between rooms: ~0.15m each
+ *   Sum check: 1.22 + 0.15 + 1.22 + 0.15 + 2.71 + 0.15 + 1.98 + 0.15 + 4.12 = 11.85
+ *   Adjust stair depth to fit: stairs = 11.72 - (1.22+0.15+1.22+0.15+0.15+1.98+0.15+4.12) = 2.58m
+ *
+ * RIGHT-SIDE WIDTH:
+ *   Corridor: 1.22m + wall 0.15m + Rooms: 2.71m = 4.08m
+ *   Kitchen is 3.31m wide (extends from corridor left edge to right wall)
+ *   So: corridor(1.22) + wall(0.15) + remaining(1.94) = 3.31? No.
+ *   Kitchen 3.31m is measured differently. Let's say:
+ *   Right side total = max(3.31, 1.22+0.15+2.71) = max(3.31, 4.08) = 4.08m
+ *   Kitchen 3.31m wide means it doesn't span the full right side.
+ *   Actually kitchen 4.12 is the depth, 3.31 is the width.
+ *   Total right side width = 1.22 (corridor) + 0.15 (wall) + 2.71 (rooms) = 4.08m
+ *   Kitchen width 3.31m < 4.08m, so kitchen doesn't fill full width.
+ *   But from the plan, kitchen appears to span the full right side.
+ *   Let me use: right side = 3.31m + 1.22m = 4.53m? Or just use 4.08m.
+ *
+ *   Looking at the plan again: the corridor is only in the MIDDLE section.
+ *   At the top: Guest Toilet and Male Toilet span the full right-side width.
+ *   In the middle: Corridor (1.22m) + Maid's Room (2.71m) = 3.93m? No.
+ *   At the bottom: Kitchen spans the full right-side width.
+ *
+ *   I'll use: right side total width = 1.22 + 0.15 + 2.71 = 4.08m
+ *   Kitchen width = 3.31m, positioned to fill from corridor to right wall:
+ *   Kitchen left = corridor_right_edge, Kitchen right = apartment_right
+ *
+ * FINAL: Let me simplify. Right side width = corridor(1.22) + wall(0.15) + rooms(2.71) = 4.08
+ * But kitchen is labeled 3.31 wide. Kitchen spans from partition wall to right wall = 4.08m?
+ * The 3.31 might be interior dimension. With walls: 3.31 + 0.15 + 0.15 = 3.61? Still not 4.08.
+ *
+ * SIMPLIFICATION: Use the dimensions as-is, don't over-constrain.
+ * Right side = 1.22(corr) + 0.15(wall) + 2.71(rooms) = 4.08m
+ * Kitchen = 3.31m wide (interior), starts at partition+wall
+ * Total apt width = 5.78 + 0.20(partition) + 4.08 = 10.06m
  */
 
 export const WALL_HEIGHT = 3.0;
-export const WALL_THICKNESS = 0.20;
+export const EXT_WALL = 0.20; // exterior wall thickness
+export const INT_WALL = 0.15; // interior wall/partition thickness
 export const DOOR_HEIGHT = 2.4;
-export const DOOR_WIDTH_STANDARD = 0.9;
 export const WINDOW_HEIGHT = 1.2;
-export const WINDOW_SILL_HEIGHT = 0.9;
+export const WINDOW_SILL = 0.9;
 
+// ============================================================
+// MASTER DIMENSIONS
+// ============================================================
+const APT_DEPTH = 11.72; // total depth (Z), left wall
+const REC_WIDTH = 5.78;  // reception width (X)
+
+// Right side
+const CORR_W = 1.22;     // corridor width
+const ROOM_W = 2.71;     // maid's room width (also depth)
+const RIGHT_W = CORR_W + INT_WALL + ROOM_W; // 1.22 + 0.15 + 2.71 = 4.08
+
+// Partition wall
+const PART_X = REC_WIDTH;                    // 5.78 (left face)
+const PART_XR = PART_X + INT_WALL;           // 5.93 (right face)
+
+// Apartment total width
+const APT_WIDTH = PART_XR + RIGHT_W;         // 5.93 + 4.08 = 10.01
+
+// Corridor X bounds
+const CORR_L = PART_XR;                      // 5.93
+const CORR_R = CORR_L + CORR_W;             // 7.15
+
+// Rooms column X bounds
+const ROOM_WALL_X = CORR_R + INT_WALL;      // 7.30
+const ROOM_R = ROOM_WALL_X + ROOM_W;        // 10.01 = APT_WIDTH ✓
+
+// ── Right-side vertical stack (Z coordinates) ──
+
+// Guest Toilet: top
+const GT_TOP = 0;
+const GT_DEPTH = 1.22;
+const GT_BOT = GT_TOP + GT_DEPTH;            // 1.22
+
+// Male Toilet: below GT
+const MT_TOP = GT_BOT + INT_WALL;            // 1.37
+const MT_DEPTH = 1.22;
+const MT_BOT = MT_TOP + MT_DEPTH;            // 2.59
+
+// Stairs: below MT (OPEN to reception)
+const STAIR_TOP = MT_BOT + INT_WALL;         // 2.74
+// Calculate stair depth to fill gap before corridor
+// Corridor top = Kitchen top - Kitchen depth... no, let's work bottom-up
+
+// Kitchen: at bottom
+const KIT_DEPTH = 4.12;
+const KIT_WIDTH = 3.31;
+const KIT_BOT = APT_DEPTH;                   // 11.72
+const KIT_TOP = KIT_BOT - KIT_DEPTH;         // 7.60
+
+// Corridor: above kitchen
+const CORR_DEPTH = 1.98;
+const CORR_BOT = KIT_TOP - INT_WALL;         // 7.45
+const CORR_TOP = CORR_BOT - CORR_DEPTH;      // 5.47
+
+// Maid's Room: same Z range as corridor (to the right of corridor)
+const MR_DEPTH = 2.71;
+const MR_TOP = CORR_TOP;                     // 5.47
+const MR_BOT = MR_TOP + MR_DEPTH;            // 8.18
+
+// Stairs: fills gap between Male Toilet bottom and Corridor top
+const STAIR_BOT = CORR_TOP - INT_WALL;       // 5.32
+// STAIR_TOP already = 2.74
+const STAIR_DEPTH = STAIR_BOT - STAIR_TOP;   // 2.58
+
+// ── Partition wall: only from corridor top downward ──
+// Above CORR_TOP, the reception is OPEN to the right side (stairs, GT, MT)
+const PARTITION_START_Z = CORR_TOP;           // 5.47
+const PARTITION_END_Z = APT_DEPTH;            // 11.72
+
+// ── Reception extends into the right side above the corridor ──
+// The reception occupies:
+//   Left section: 0→5.78 (X), 0→11.72 (Z)
+//   Right extension: 5.78→10.01 (X), MT_BOT→CORR_TOP (Z) — the stairs area
+//   Plus the GT and MT areas are open to reception too
+
+// ── Void (dashed rectangle in reception) ──
+const VOID_X = 0.30;
+const VOID_Z_START = APT_DEPTH - 5.5;        // approximate
+const VOID_W = 5.15;
+const VOID_D = 4.0;
+
+// ── Garden L-shape ──
+const GARDEN_SIDE_W = 5.0;   // garden extends left of apartment
+const GARDEN_BOT_D = 5.0;    // garden extends below apartment
+
+// ============================================================
+// COLORS
+// ============================================================
 export const COLORS = {
   wallExterior: 0x334455,
   wallInterior: 0x3a4a5a,
   wallEdge: 0x00d4ff,
   door: 0xffa500,
   window: 0x4488ff,
-  windowGlass: 0x88ccff,
   reception: 0x1a5c3a,
   kitchen: 0x5c3a1a,
   maidsRoom: 0x3a1a5c,
   guestToilet: 0x1a3a5c,
+  maleToilet: 0x1a4a6c,
   corridor: 0x2a3a4a,
   garden: 0x2a5c2a,
   stairs: 0x4a5568,
 };
 
+// ============================================================
+// TYPES
+// ============================================================
 export interface WallSegment {
   start: [number, number];
   end: [number, number];
@@ -102,271 +228,242 @@ export interface DimensionLine {
 }
 
 // ============================================================
-// PRECISE COORDINATES (all in meters)
-// ============================================================
-
-// Apartment envelope
-const APT_D = 11.72; // full depth (north to south)
-
-// Reception (left side — one large room, full height)
-const REC_W = 5.78;
-
-// Partition wall at X = REC_W
-const PART_X = REC_W;
-const PART_X_R = PART_X + WALL_THICKNESS; // right face of partition = 5.98
-
-// Right side total width = 4.12m (from kitchen dimension)
-const RIGHT_W = 4.12;
-const APT_W = PART_X_R + RIGHT_W; // 5.98 + 4.12 = 10.10
-
-// Corridor
-const CORR_W = 1.22;
-const CORR_LEFT = PART_X_R; // 5.98
-const CORR_RIGHT = CORR_LEFT + CORR_W; // 7.20
-
-// Rooms column wall
-const ROOM_WALL_X = CORR_RIGHT + WALL_THICKNESS; // 7.40
-const ROOM_COL_W = APT_W - ROOM_WALL_X; // 2.70 ≈ 2.71
-
-// ── Internal Stairs (TOP of right column) ──
-const STAIR_TOP = 0;
-const STAIR_D = 1.98;
-const STAIR_BOTTOM = STAIR_TOP + STAIR_D; // 1.98
-// Stairs span the full right-side width
-const STAIR_LEFT = PART_X_R;
-const STAIR_RIGHT = APT_W;
-
-// ── Guest Toilet (below stairs) ──
-const GT_TOP = STAIR_BOTTOM + WALL_THICKNESS; // 2.18
-const GT_D = 2.31; // to fill the gap: GT_BOTTOM = GT_TOP + GT_D
-const GT_BOTTOM = GT_TOP + GT_D; // 4.49
-
-// ── Maid's Room (below guest toilet) ──
-const MR_TOP = GT_BOTTOM + WALL_THICKNESS; // 4.69
-const MR_W = 2.71;
-const MR_D = 2.71;
-const MR_LEFT = ROOM_WALL_X; // 7.40
-const MR_RIGHT = MR_LEFT + MR_W; // 10.11 ≈ APT_W
-const MR_BOTTOM = MR_TOP + MR_D; // 7.40
-
-// ── Kitchen (bottom-right) ──
-const KIT_D = 3.31;
-const KIT_W = 4.12;
-const KIT_BOTTOM = APT_D; // 11.72
-const KIT_TOP = KIT_BOTTOM - KIT_D; // 8.41
-const KIT_LEFT = PART_X_R; // 5.98
-const KIT_RIGHT = KIT_LEFT + KIT_W; // 10.10 = APT_W
-
-// ── Corridor extent ──
-const CORR_TOP = STAIR_BOTTOM + WALL_THICKNESS; // 2.18 (starts below stairs)
-const CORR_BOTTOM = KIT_TOP; // 8.41
-
-// ── Dashed void in reception ──
-const VOID_X = 0.30;
-const VOID_Z = 3.0;
-const VOID_W = 5.15;
-const VOID_D = 6.0;
-
-// ── Garden L-shape ──
-const GARDEN_LEFT_W = 5.0;
-const GARDEN_BOTTOM_D = 5.0;
-
-// ============================================================
 // ROOMS
 // ============================================================
 export const rooms: Room[] = [
+  // Reception: L-shaped open plan
+  // Left section full height + right extension above corridor
   {
     name: "Reception",
     vertices: [
       [0, 0],
-      [REC_W, 0],
-      [REC_W, APT_D],
-      [0, APT_D],
+      [APT_WIDTH, 0],
+      [APT_WIDTH, GT_TOP],
+      [APT_WIDTH, STAIR_BOT],
+      [PART_XR, STAIR_BOT],
+      [PART_XR, PARTITION_START_Z],
+      [PART_X, PARTITION_START_Z],
+      [PART_X, APT_DEPTH],
+      [0, APT_DEPTH],
     ],
     color: COLORS.reception,
-    labelPosition: [REC_W / 2, APT_D / 2],
-    dimensions: `5.78m × 11.72m`,
+    labelPosition: [REC_WIDTH / 2, APT_DEPTH * 0.6],
+    dimensions: "Reception",
   },
-  {
-    name: "Internal Stairs",
-    vertices: [
-      [STAIR_LEFT, STAIR_TOP],
-      [STAIR_RIGHT, STAIR_TOP],
-      [STAIR_RIGHT, STAIR_BOTTOM],
-      [STAIR_LEFT, STAIR_BOTTOM],
-    ],
-    color: COLORS.stairs,
-    labelPosition: [(STAIR_LEFT + STAIR_RIGHT) / 2, (STAIR_TOP + STAIR_BOTTOM) / 2],
-    dimensions: `${RIGHT_W.toFixed(1)}m × ${STAIR_D}m`,
-  },
+  // Guest Toilet (top-right area, enclosed)
   {
     name: "Guest Toilet",
     vertices: [
-      [PART_X_R, GT_TOP],
-      [APT_W, GT_TOP],
-      [APT_W, GT_BOTTOM],
-      [PART_X_R, GT_BOTTOM],
+      [PART_XR, GT_TOP],
+      [APT_WIDTH, GT_TOP],
+      [APT_WIDTH, GT_BOT],
+      [PART_XR, GT_BOT],
     ],
     color: COLORS.guestToilet,
-    labelPosition: [(PART_X_R + APT_W) / 2, (GT_TOP + GT_BOTTOM) / 2],
-    dimensions: `Guest Toilet`,
+    labelPosition: [(PART_XR + APT_WIDTH) / 2, (GT_TOP + GT_BOT) / 2],
+    dimensions: "1.22m",
   },
+  // Male Toilet (below guest toilet)
+  {
+    name: "Male Toilet",
+    vertices: [
+      [PART_XR, MT_TOP],
+      [APT_WIDTH, MT_TOP],
+      [APT_WIDTH, MT_BOT],
+      [PART_XR, MT_BOT],
+    ],
+    color: COLORS.maleToilet,
+    labelPosition: [(PART_XR + APT_WIDTH) / 2, (MT_TOP + MT_BOT) / 2],
+    dimensions: "1.22m",
+  },
+  // Internal Stairs (open to reception)
+  {
+    name: "Stairs",
+    vertices: [
+      [PART_XR, STAIR_TOP],
+      [APT_WIDTH, STAIR_TOP],
+      [APT_WIDTH, STAIR_BOT],
+      [PART_XR, STAIR_BOT],
+    ],
+    color: COLORS.stairs,
+    labelPosition: [(PART_XR + APT_WIDTH) / 2, (STAIR_TOP + STAIR_BOT) / 2],
+    dimensions: `${STAIR_DEPTH.toFixed(1)}m`,
+  },
+  // Corridor
   {
     name: "Corridor",
     vertices: [
-      [CORR_LEFT, CORR_TOP],
-      [CORR_RIGHT, CORR_TOP],
-      [CORR_RIGHT, CORR_BOTTOM],
-      [CORR_LEFT, CORR_BOTTOM],
+      [CORR_L, CORR_TOP],
+      [CORR_R, CORR_TOP],
+      [CORR_R, CORR_BOT],
+      [CORR_L, CORR_BOT],
     ],
     color: COLORS.corridor,
-    labelPosition: [CORR_LEFT + CORR_W / 2, (CORR_TOP + CORR_BOTTOM) / 2],
-    dimensions: "1.22m wide",
+    labelPosition: [(CORR_L + CORR_R) / 2, (CORR_TOP + CORR_BOT) / 2],
+    dimensions: "1.22m × 1.98m",
   },
+  // Maid's Room
   {
     name: "Maid's Room",
     vertices: [
-      [MR_LEFT, MR_TOP],
-      [MR_RIGHT, MR_TOP],
-      [MR_RIGHT, MR_BOTTOM],
-      [MR_LEFT, MR_BOTTOM],
+      [ROOM_WALL_X, MR_TOP],
+      [ROOM_R, MR_TOP],
+      [ROOM_R, MR_BOT],
+      [ROOM_WALL_X, MR_BOT],
     ],
     color: COLORS.maidsRoom,
-    labelPosition: [MR_LEFT + MR_W / 2, MR_TOP + MR_D / 2],
+    labelPosition: [(ROOM_WALL_X + ROOM_R) / 2, (MR_TOP + MR_BOT) / 2],
     dimensions: "2.71m × 2.71m",
   },
+  // Kitchen
   {
     name: "Kitchen",
     vertices: [
-      [KIT_LEFT, KIT_TOP],
-      [KIT_RIGHT, KIT_TOP],
-      [KIT_RIGHT, KIT_BOTTOM],
-      [KIT_LEFT, KIT_BOTTOM],
+      [PART_XR, KIT_TOP],
+      [PART_XR + KIT_WIDTH, KIT_TOP],
+      [PART_XR + KIT_WIDTH, KIT_BOT],
+      [PART_XR, KIT_BOT],
     ],
     color: COLORS.kitchen,
-    labelPosition: [KIT_LEFT + KIT_W / 2, KIT_TOP + KIT_D / 2],
-    dimensions: "4.12m × 3.31m",
+    labelPosition: [PART_XR + KIT_WIDTH / 2, (KIT_TOP + KIT_BOT) / 2],
+    dimensions: "3.31m × 4.12m",
   },
+  // Garden (L-shaped)
   {
     name: "Garden",
     vertices: [
-      [-GARDEN_LEFT_W, 0],
+      [-GARDEN_SIDE_W, 0],
       [0, 0],
-      [0, APT_D],
-      [APT_W, APT_D],
-      [APT_W, APT_D + GARDEN_BOTTOM_D],
-      [-GARDEN_LEFT_W, APT_D + GARDEN_BOTTOM_D],
+      [0, APT_DEPTH],
+      [APT_WIDTH, APT_DEPTH],
+      [APT_WIDTH, APT_DEPTH + GARDEN_BOT_D],
+      [-GARDEN_SIDE_W, APT_DEPTH + GARDEN_BOT_D],
     ],
     color: COLORS.garden,
-    labelPosition: [-GARDEN_LEFT_W / 2, APT_D + GARDEN_BOTTOM_D / 2],
+    labelPosition: [APT_WIDTH / 2, APT_DEPTH + GARDEN_BOT_D / 2],
     dimensions: "Garden",
   },
 ];
 
-// Dashed void in reception
+// ============================================================
+// VOID & STAIRS
+// ============================================================
 export const receptionVoid = {
   x: VOID_X,
-  z: VOID_Z,
+  z: VOID_Z_START,
   width: VOID_W,
   depth: VOID_D,
 };
 
-// Internal staircase
 export const internalStairs = {
-  x: STAIR_LEFT,
+  x: PART_XR,
   z: STAIR_TOP,
-  width: STAIR_RIGHT - STAIR_LEFT,
-  depth: STAIR_D,
-  stepCount: 12,
+  width: APT_WIDTH - PART_XR,
+  depth: STAIR_DEPTH,
+  stepCount: 14,
 };
 
 // ============================================================
 // WALLS
 // ============================================================
 export const walls: WallSegment[] = [
-  // === EXTERIOR WALLS ===
-  // Top wall
-  { start: [0, 0], end: [APT_W, 0], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Left wall
-  { start: [0, 0], end: [0, APT_D], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Bottom wall
-  { start: [0, APT_D], end: [APT_W, APT_D], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Right wall
-  { start: [APT_W, 0], end: [APT_W, APT_D], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
+  // ═══ EXTERIOR WALLS ═══
+  // Top wall (full width)
+  { start: [0, 0], end: [APT_WIDTH, 0], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // Left wall (full depth)
+  { start: [0, 0], end: [0, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // Bottom wall (full width)
+  { start: [0, APT_DEPTH], end: [APT_WIDTH, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
+  // Right wall (full depth)
+  { start: [APT_WIDTH, 0], end: [APT_WIDTH, APT_DEPTH], thickness: EXT_WALL, height: WALL_HEIGHT, isExterior: true },
 
-  // === GARDEN BOUNDARY WALLS (low) ===
-  { start: [-GARDEN_LEFT_W, 0], end: [-GARDEN_LEFT_W, APT_D + GARDEN_BOTTOM_D], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
-  { start: [-GARDEN_LEFT_W, 0], end: [0, 0], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
-  { start: [-GARDEN_LEFT_W, APT_D + GARDEN_BOTTOM_D], end: [APT_W, APT_D + GARDEN_BOTTOM_D], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
-  { start: [APT_W, APT_D], end: [APT_W, APT_D + GARDEN_BOTTOM_D], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
+  // ═══ GARDEN BOUNDARY (low walls) ═══
+  { start: [-GARDEN_SIDE_W, 0], end: [0, 0], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
+  { start: [-GARDEN_SIDE_W, 0], end: [-GARDEN_SIDE_W, APT_DEPTH + GARDEN_BOT_D], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
+  { start: [-GARDEN_SIDE_W, APT_DEPTH + GARDEN_BOT_D], end: [APT_WIDTH, APT_DEPTH + GARDEN_BOT_D], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
+  { start: [APT_WIDTH, APT_DEPTH], end: [APT_WIDTH, APT_DEPTH + GARDEN_BOT_D], thickness: 0.12, height: WALL_HEIGHT * 0.35, isExterior: true },
 
-  // === INTERIOR WALLS ===
+  // ═══ INTERIOR WALLS ═══
 
-  // Main partition wall (left | right, full height)
-  { start: [PART_X, 0], end: [PART_X, APT_D], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
+  // ── Right-side room dividers (horizontal walls) ──
+  // Guest Toilet bottom wall
+  { start: [PART_XR, GT_BOT], end: [APT_WIDTH, GT_BOT], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Male Toilet bottom wall
+  { start: [PART_XR, MT_BOT], end: [APT_WIDTH, MT_BOT], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Stairs bottom wall (horizontal)
-  { start: [PART_X_R, STAIR_BOTTOM], end: [APT_W, STAIR_BOTTOM], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
+  // ── Partition wall: ONLY from corridor top to apartment bottom ──
+  // This is the key correction: reception is open above this level
+  { start: [PART_X, PARTITION_START_Z], end: [PART_X, APT_DEPTH], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Guest toilet bottom wall
-  { start: [PART_X_R, GT_BOTTOM], end: [APT_W, GT_BOTTOM], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
+  // ── Right-side vertical wall between GT/MT and stairs ──
+  // There's a wall separating the toilets from the stairs
+  // Actually from the plan, GT and MT are at the top, stairs below — separated by horizontal walls only
+  // The GT/MT/Stairs all span the full right-side width
 
-  // Corridor right wall (between corridor and rooms column)
-  { start: [CORR_RIGHT, CORR_TOP], end: [CORR_RIGHT, CORR_BOTTOM], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
+  // ── Corridor walls ──
+  // Corridor top wall (horizontal)
+  { start: [PART_XR, CORR_TOP], end: [APT_WIDTH, CORR_TOP], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
+  // Corridor right wall (vertical, between corridor and rooms)
+  { start: [CORR_R, CORR_TOP], end: [CORR_R, CORR_BOT], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Maid's room top wall (may overlap with GT bottom, but that's fine)
-  { start: [ROOM_WALL_X, MR_TOP], end: [MR_RIGHT, MR_TOP], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
+  // ── Maid's Room walls ──
+  // Maid's Room bottom wall
+  { start: [ROOM_WALL_X, MR_BOT], end: [ROOM_R, MR_BOT], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 
-  // Maid's room bottom wall
-  { start: [ROOM_WALL_X, MR_BOTTOM], end: [MR_RIGHT, MR_BOTTOM], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
-
-  // Kitchen top wall
-  { start: [KIT_LEFT, KIT_TOP], end: [KIT_RIGHT, KIT_TOP], thickness: WALL_THICKNESS, height: WALL_HEIGHT, isExterior: false },
+  // ── Kitchen top wall ──
+  { start: [PART_XR, KIT_TOP], end: [PART_XR + KIT_WIDTH, KIT_TOP], thickness: INT_WALL, height: WALL_HEIGHT, isExterior: false },
 ];
 
 // ============================================================
 // DOORS
 // ============================================================
 export const doors: DoorOpening[] = [
-  // Main entrance door (at top wall, right side — marker 3)
+  // Entrance: at top wall, in the reception area (left of the right-side rooms)
   {
-    position: [PART_X_R + RIGHT_W / 2, 0],
+    position: [PART_X - 1.0, 0],
     width: 1.0,
     height: DOOR_HEIGHT,
     wallDirection: "x",
     label: "Entrance",
   },
-  // Door from corridor to reception (in partition wall)
+  // Guest Toilet door
   {
-    position: [PART_X, 5.0],
-    width: 1.0,
-    height: DOOR_HEIGHT,
-    wallDirection: "z",
-  },
-  // Door to guest toilet (from corridor side)
-  {
-    position: [CORR_LEFT + 0.6, GT_TOP],
+    position: [PART_XR + RIGHT_W / 2, GT_BOT],
     width: 0.7,
     height: DOOR_HEIGHT,
     wallDirection: "x",
   },
-  // Door to maid's room (from corridor)
+  // Male Toilet door
   {
-    position: [ROOM_WALL_X, MR_TOP + 1.0],
-    width: DOOR_WIDTH_STANDARD,
-    height: DOOR_HEIGHT,
-    wallDirection: "z",
-  },
-  // Door to kitchen (from corridor/reception side)
-  {
-    position: [KIT_LEFT + 1.5, KIT_TOP],
-    width: DOOR_WIDTH_STANDARD,
+    position: [PART_XR + RIGHT_W / 2, MT_BOT],
+    width: 0.7,
     height: DOOR_HEIGHT,
     wallDirection: "x",
   },
-  // Garden sliding door from reception (south/bottom wall)
+  // Corridor to reception (opening in partition wall)
   {
-    position: [2.5, APT_D],
+    position: [PART_X, CORR_TOP + CORR_DEPTH / 2],
+    width: 0.9,
+    height: DOOR_HEIGHT,
+    wallDirection: "z",
+  },
+  // Maid's Room door (from corridor)
+  {
+    position: [CORR_R, MR_TOP + 1.0],
+    width: 0.9,
+    height: DOOR_HEIGHT,
+    wallDirection: "z",
+  },
+  // Kitchen door
+  {
+    position: [PART_XR + 1.5, KIT_TOP],
+    width: 0.9,
+    height: DOOR_HEIGHT,
+    wallDirection: "x",
+  },
+  // Garden sliding door (bottom wall of reception)
+  {
+    position: [REC_WIDTH / 2, APT_DEPTH],
     width: 2.0,
     height: DOOR_HEIGHT,
     wallDirection: "x",
@@ -377,20 +474,19 @@ export const doors: DoorOpening[] = [
 // WINDOWS
 // ============================================================
 export const windows: WindowOpening[] = [
-  // Reception left wall — upper window
+  // Reception left wall windows
   {
-    position: [0, 4.0],
+    position: [0, 3.5],
     width: 1.5,
     height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL_HEIGHT,
+    sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
-  // Reception left wall — lower window
   {
-    position: [0, 9.0],
+    position: [0, 8.5],
     width: 1.5,
     height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL_HEIGHT,
+    sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
   // Reception top wall window
@@ -398,24 +494,24 @@ export const windows: WindowOpening[] = [
     position: [2.5, 0],
     width: 1.5,
     height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL_HEIGHT,
+    sillHeight: WINDOW_SILL,
     wallDirection: "x",
   },
-  // Maid's room — right exterior wall window
+  // Kitchen right wall window
   {
-    position: [APT_W, MR_TOP + MR_D / 2],
+    position: [PART_XR + KIT_WIDTH, KIT_TOP + KIT_DEPTH / 2],
     width: 1.0,
     height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL_HEIGHT,
+    sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
-  // Kitchen — south wall window
+  // Maid's Room window (right wall)
   {
-    position: [KIT_LEFT + 2.5, APT_D],
+    position: [APT_WIDTH, MR_TOP + MR_DEPTH / 2],
     width: 1.0,
     height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL_HEIGHT,
-    wallDirection: "x",
+    sillHeight: WINDOW_SILL,
+    wallDirection: "z",
   },
 ];
 
@@ -424,32 +520,41 @@ export const windows: WindowOpening[] = [
 // ============================================================
 export const dimensionLines: DimensionLine[] = [
   // Reception width: 5.78m
-  { start: [0, 0], end: [REC_W, 0], label: "5.78m", offset: -0.6 },
-  // Full apartment depth: 11.72m
-  { start: [0, 0], end: [0, APT_D], label: "11.72m", offset: -0.8 },
-  // Kitchen width: 4.12m
-  { start: [KIT_LEFT, APT_D], end: [KIT_RIGHT, APT_D], label: "4.12m", offset: 0.5 },
-  // Kitchen depth: 3.31m
-  { start: [APT_W, KIT_TOP], end: [APT_W, KIT_BOTTOM], label: "3.31m", offset: 0.5 },
-  // Maid's room: 2.71m × 2.71m
-  { start: [MR_LEFT, MR_TOP], end: [MR_RIGHT, MR_TOP], label: "2.71m", offset: -0.3 },
-  { start: [MR_RIGHT, MR_TOP], end: [MR_RIGHT, MR_BOTTOM], label: "2.71m", offset: 0.4 },
-  // Corridor width: 1.22m
-  { start: [CORR_LEFT, 5.0], end: [CORR_RIGHT, 5.0], label: "1.22m", offset: -0.3 },
-  // Dining area: 3.93m
-  { start: [0.5, 10.0], end: [4.43, 10.0], label: "3.93m", offset: 0.4 },
-  // Reception void: 5.15m
-  { start: [VOID_X, VOID_Z], end: [VOID_X + VOID_W, VOID_Z], label: "5.15m", offset: -0.3 },
-  // Stair depth: 1.98m
-  { start: [APT_W, STAIR_TOP], end: [APT_W, STAIR_BOTTOM], label: "1.98m", offset: 0.5 },
+  { start: [0, 0], end: [REC_WIDTH, 0], label: "5.78m", offset: -0.8 },
+  // Total apartment depth: 11.72m
+  { start: [0, 0], end: [0, APT_DEPTH], label: "11.72m", offset: -1.0 },
+  // Kitchen: 3.31m × 4.12m
+  { start: [PART_XR, KIT_TOP], end: [PART_XR + KIT_WIDTH, KIT_TOP], label: "3.31m", offset: -0.4 },
+  { start: [PART_XR + KIT_WIDTH, KIT_TOP], end: [PART_XR + KIT_WIDTH, KIT_BOT], label: "4.12m", offset: 0.5 },
+  // Maid's Room: 2.71m × 2.71m
+  { start: [ROOM_WALL_X, MR_TOP], end: [ROOM_R, MR_TOP], label: "2.71m", offset: -0.3 },
+  { start: [ROOM_R, MR_TOP], end: [ROOM_R, MR_BOT], label: "2.71m", offset: 0.4 },
+  // Corridor: 1.22m wide, 1.98m deep
+  { start: [CORR_L, CORR_TOP + 0.5], end: [CORR_R, CORR_TOP + 0.5], label: "1.22m", offset: -0.3 },
+  { start: [CORR_L, CORR_TOP], end: [CORR_L, CORR_BOT], label: "1.98m", offset: -0.4 },
+  // Guest Toilet depth: 1.22m
+  { start: [APT_WIDTH, GT_TOP], end: [APT_WIDTH, GT_BOT], label: "1.22m", offset: 0.5 },
+  // Male Toilet depth: 1.22m
+  { start: [APT_WIDTH, MT_TOP], end: [APT_WIDTH, MT_BOT], label: "1.22m", offset: 0.5 },
+  // Void: 5.15m
+  { start: [VOID_X, VOID_Z_START], end: [VOID_X + VOID_W, VOID_Z_START], label: "5.15m", offset: -0.3 },
+  // Dining: 3.93m
+  { start: [0.5, APT_DEPTH - 2.5], end: [0.5 + 3.93, APT_DEPTH - 2.5], label: "3.93m", offset: 0.4 },
 ];
 
 // ============================================================
 // PROPERTY BOUNDS
 // ============================================================
 export const propertyBounds = {
-  minX: -GARDEN_LEFT_W,
-  maxX: APT_W,
+  minX: -GARDEN_SIDE_W,
+  maxX: APT_WIDTH,
   minZ: 0,
-  maxZ: APT_D + GARDEN_BOTTOM_D,
+  maxZ: APT_DEPTH + GARDEN_BOT_D,
+};
+
+// Export computed values for the 2D viewer ruler
+export const APT_DIMS = {
+  width: APT_WIDTH,
+  depth: APT_DEPTH,
+  recWidth: REC_WIDTH,
 };

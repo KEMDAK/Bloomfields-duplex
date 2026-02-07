@@ -253,7 +253,7 @@ function addEdges(parent: THREE.Mesh, l: number, h: number, t: number, isExt: bo
 function addWindowGlass(x: number, z: number, w: number, h: number, sill: number, angle: number, group: THREE.Group) {
   const geo = new THREE.PlaneGeometry(w, h);
   const mat = new THREE.MeshStandardMaterial({
-    color: COLORS.windowGlass, transparent: true, opacity: 0.3,
+    color: COLORS.window, transparent: true, opacity: 0.3,
     side: THREE.DoubleSide, roughness: 0.1, metalness: 0.5,
   });
   const mesh = new THREE.Mesh(geo, mat);

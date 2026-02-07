@@ -1,5 +1,5 @@
-import FloorPlan2D from "@/components/FloorPlan2D";
+import FloorPlanViewer from "@/components/FloorPlanViewer";
 
 export default function Home() {
-  return <FloorPlan2D />;
+  return <FloorPlanViewer />;
 }

@@ -1,12 +1,11 @@
-# Corrections TODO - Round 4
+# Corrections TODO - Round 5
 
-## Issues identified by user:
-- [ ] "Top Section" and "Entrance" are NOT separate rooms — they are all part of the Reception
-- [ ] The Reception extends from the top of the apartment all the way down (full height on the left side)
-- [ ] The stairs are between the Guest Toilet and the entrance/reception — at the TOP of the right-side column
-- [ ] Re-analyze the floor plan image carefully to get the correct layout
-
-## Corrected understanding:
-- The left side is one large Reception room spanning the full apartment height
-- The right side has (from top to bottom): Stairs, Guest Toilet, Maid's Room, Kitchen
-- The entrance door is at the top, opening into the reception
+- [ ] Reception is OPEN to stairs and guest bathroom — no wall separating them
+- [ ] Partition wall only starts from the corridor downward
+- [ ] Reception extends beyond the corridor and internal stairs area
+- [ ] Fix orientation — plan is landscape, not portrait
+- [ ] Ensure all dimensions are consistent — no two similar dimensions with different sizes
+- [ ] Use dimensions from the second image (with labels), layout from the first image (clearer)
+- [ ] Add ruler scale along edges of the 2D viewer for dimension verification
+- [ ] Combine 2D and 3D into a single unified viewer with smooth toggle
+- [ ] Allow switching via button or orbit rotation
