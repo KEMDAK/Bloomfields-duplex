@@ -453,73 +453,77 @@ export const doors: DoorOpening[] = [
 // WINDOWS
 // ============================================================
 export const windows: WindowOpening[] = [
-  // 1. Notch step wall windows: on the horizontal notch wall (z=NOTCH_H)
-  //    Two small windows visible in the "C" area on the notch step wall
+  // ═══ "C" AREA (NOTCH) — WEST WALL ═══
+  // Two small windows on the west wall (x=0) of the C/notch area
+  // Visible in the drawing as two parallel-line marks on the left wall of C
   {
-    position: [NOTCH_W / 3, NOTCH_H],
+    position: [0, 0.30],
     width: 0.60,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
-    wallDirection: "x",
+    wallDirection: "z",
   },
   {
-    position: [NOTCH_W * 2 / 3, NOTCH_H],
+    position: [0, 1.10],
     width: 0.60,
-    height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL,
-    wallDirection: "x",
-  },
-
-  // 2. West wall window (reception, upper): on the west wall of reception
-  {
-    position: [0, WALL_BELOW_ROOMS + 1.5],
-    width: 1.50,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
 
-  // 3. West wall window (reception, lower): second window on west wall
+  // ═══ WEST WALL — RECEPTION ═══
+  // Two windows on the west wall below the entrance, in the reception area
+  // Visible in the drawing as parallel-line marks on the left wall of reception
   {
-    position: [0, APT_DEPTH - 1.8],
-    width: 1.50,
-    height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL,
-    wallDirection: "z",
-  },
-
-  // 4. Kitchen north wall window: at the top of the kitchen
-  {
-    position: [K_X0 + KIT_W / 2, 0],
+    position: [0, APT_DEPTH - 2.5],
     width: 1.20,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
-    wallDirection: "x",
+    wallDirection: "z",
   },
-
-  // 5. Kitchen east wall window: on the right side of the kitchen
   {
-    position: [K_X1, 1.50],
+    position: [0, APT_DEPTH - 1.0],
     width: 1.20,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
 
-  // 6. Maid's Room north wall window: at the top of MR
+  // ═══ KITCHEN — NORTH WALL ═══
+  // Window on the kitchen's north wall (z=0)
+  // Visible in the drawing near the top-right of the kitchen
   {
-    position: [(MR_X0 + MR_X1) / 2, 0],
-    width: 1.00,
+    position: [K_X0 + 0.80, ROOMS_Z0],
+    width: 1.20,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "x",
   },
 
-  // 7. South wall window (reception): large window/sliding glass to garden
-  //    Adjacent to the garden sliding door
+  // ═══ KITCHEN — EAST WALL ═══
+  // Window on the kitchen's east wall (x=K_X1)
+  // Visible in the drawing on the right side of the kitchen
   {
-    position: [7.0, APT_DEPTH],
-    width: 2.00,
+    position: [K_X1, 1.00],
+    width: 1.50,
+    height: WINDOW_HEIGHT,
+    sillHeight: WINDOW_SILL,
+    wallDirection: "z",
+  },
+
+  // ═══ SOUTH WALL — RECEPTION ═══
+  // Two sliding glass windows on the south wall (z=APT_DEPTH)
+  // Visible in the drawing as two dark marks on the bottom wall
+  {
+    position: [2.0, APT_DEPTH],
+    width: 1.80,
+    height: WINDOW_HEIGHT,
+    sillHeight: 0.0,
+    wallDirection: "x",
+  },
+  {
+    position: [5.5, APT_DEPTH],
+    width: 1.80,
     height: WINDOW_HEIGHT,
     sillHeight: 0.0,
     wallDirection: "x",
