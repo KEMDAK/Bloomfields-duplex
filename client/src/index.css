@@ -119,6 +119,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -174,4 +178,13 @@
       max-width: 1280px; /* Standard content width */
     }
   }
+}
+@keyframes fade-out {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-fade-out {
+  animation: fade-out 4s ease-out forwards;
 }
