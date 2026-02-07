@@ -1,8 +1,6 @@
 /**
- * Scene Builder - Constructs the 3D floor plan from data (CORRECTED)
- * - L-shaped garden
- * - Internal staircase inside reception
- * - Ground/grid only within property bounds
+ * Scene Builder - Constructs the 3D floor plan (FINAL PRECISE VERSION)
+ * All geometry derived from floorPlanData coordinates.
  */
 import * as THREE from "three";
 import {
@@ -17,7 +15,7 @@ import {
   type WallSegment,
 } from "./floorPlanData";
 
-// Center offset: center the property in the scene
+// Center the property in the scene
 const CENTER_X = (propertyBounds.minX + propertyBounds.maxX) / 2;
 const CENTER_Z = (propertyBounds.minZ + propertyBounds.maxZ) / 2;
 
@@ -25,12 +23,10 @@ function toWorld(x: number, z: number): [number, number] {
   return [x - CENTER_X, z - CENTER_Z];
 }
 
-/**
- * Create ground plane ONLY within the property bounds
- */
+// ─── Ground & Grid ───────────────────────────────────────────
+
 export function createGrid(): THREE.Group {
   const group = new THREE.Group();
-
   const propW = propertyBounds.maxX - propertyBounds.minX;
   const propD = propertyBounds.maxZ - propertyBounds.minZ;
   const [cx, cz] = toWorld(
@@ -38,8 +34,8 @@ export function createGrid(): THREE.Group {
     (propertyBounds.minZ + propertyBounds.maxZ) / 2
   );
 
-  // Ground plane sized to property
-  const groundGeo = new THREE.PlaneGeometry(propW + 1, propD + 1);
+  // Ground plane (only covers property)
+  const groundGeo = new THREE.PlaneGeometry(propW + 0.5, propD + 0.5);
   const groundMat = new THREE.MeshStandardMaterial({
     color: 0x0d1117,
     roughness: 0.9,
@@ -51,19 +47,17 @@ export function createGrid(): THREE.Group {
   ground.receiveShadow = true;
   group.add(ground);
 
-  // Grid helper sized to property
-  const gridSize = Math.max(propW, propD) + 2;
-  const gridDivisions = Math.round(gridSize);
-  const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x1a2a3a, 0x111a24);
+  // Grid
+  const gridSize = Math.ceil(Math.max(propW, propD)) + 2;
+  const gridHelper = new THREE.GridHelper(gridSize, gridSize * 2, 0x1a2a3a, 0x111a24);
   gridHelper.position.set(cx, 0.0, cz);
   group.add(gridHelper);
 
   return group;
 }
 
-/**
- * Create floor polygons for each room
- */
+// ─── Floors ──────────────────────────────────────────────────
+
 export function createFloors(): THREE.Group {
   const group = new THREE.Group();
 
@@ -89,183 +83,152 @@ export function createFloors(): THREE.Group {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0.01;
     mesh.receiveShadow = true;
-    mesh.userData = { type: "floor", room: room.name };
     group.add(mesh);
   });
 
   return group;
 }
 
-/**
- * Create wall meshes with door and window cutouts
- */
+// ─── Walls ───────────────────────────────────────────────────
+
 export function createWalls(): THREE.Group {
   const group = new THREE.Group();
-  walls.forEach((wall) => {
-    createWallWithOpenings(wall, group);
-  });
+  walls.forEach((wall) => buildWall(wall, group));
   return group;
 }
 
-function createWallWithOpenings(wall: WallSegment, group: THREE.Group) {
+function buildWall(wall: WallSegment, group: THREE.Group) {
   const [sx, sz] = toWorld(wall.start[0], wall.start[1]);
   const [ex, ez] = toWorld(wall.end[0], wall.end[1]);
-
   const dx = ex - sx;
   const dz = ez - sz;
   const length = Math.sqrt(dx * dx + dz * dz);
   const angle = Math.atan2(dz, dx);
 
-  const wallOpenings = findOpeningsOnWall(wall);
+  const openings = findOpeningsOnWall(wall);
 
-  if (wallOpenings.length === 0) {
-    const geo = new THREE.BoxGeometry(length, wall.height, wall.thickness);
-    const mat = new THREE.MeshStandardMaterial({
-      color: wall.isExterior ? COLORS.wallExterior : COLORS.wallInterior,
-      transparent: true,
-      opacity: 0.7,
-      roughness: 0.6,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(sx + dx / 2, wall.height / 2, sz + dz / 2);
-    mesh.rotation.y = -angle;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-    addWallEdges(mesh, length, wall.height, wall.thickness, wall.isExterior);
+  if (openings.length === 0) {
+    addSolidWall(sx, sz, dx, dz, length, angle, wall, group);
   } else {
-    createSegmentedWall(wall, wallOpenings, sx, sz, dx, dz, length, angle, group);
+    addWallWithOpenings(sx, sz, dx, dz, length, angle, wall, openings, group);
   }
 }
 
-interface WallOpening {
+function addSolidWall(
+  sx: number, sz: number, dx: number, dz: number,
+  length: number, angle: number, wall: WallSegment, group: THREE.Group
+) {
+  const geo = new THREE.BoxGeometry(length, wall.height, wall.thickness);
+  const mat = wallMaterial(wall.isExterior);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(sx + dx / 2, wall.height / 2, sz + dz / 2);
+  mesh.rotation.y = -angle;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  addEdges(mesh, length, wall.height, wall.thickness, wall.isExterior);
+}
+
+interface Opening {
   type: "door" | "window";
-  positionAlongWall: number;
+  t: number;
   width: number;
   height: number;
   bottomY: number;
 }
 
-function findOpeningsOnWall(wall: WallSegment): WallOpening[] {
-  const openings: WallOpening[] = [];
-
-  doors.forEach((door) => {
-    const t = projectOntoWall(door.position, wall);
-    if (t !== null) {
-      openings.push({
-        type: "door",
-        positionAlongWall: t,
-        width: door.width,
-        height: door.height,
-        bottomY: 0,
-      });
-    }
-  });
-
-  windows.forEach((win) => {
-    const t = projectOntoWall(win.position, wall);
-    if (t !== null) {
-      openings.push({
-        type: "window",
-        positionAlongWall: t,
-        width: win.width,
-        height: win.height,
-        bottomY: win.sillHeight,
-      });
-    }
-  });
-
-  openings.sort((a, b) => a.positionAlongWall - b.positionAlongWall);
-  return openings;
-}
-
-function projectOntoWall(point: [number, number], wall: WallSegment): number | null {
-  const [px, pz] = point;
+function findOpeningsOnWall(wall: WallSegment): Opening[] {
+  const out: Opening[] = [];
   const [wsx, wsz] = wall.start;
   const [wex, wez] = wall.end;
   const wdx = wex - wsx;
   const wdz = wez - wsz;
-  const wallLen = Math.sqrt(wdx * wdx + wdz * wdz);
+  const wLen = Math.sqrt(wdx * wdx + wdz * wdz);
 
-  const t = ((px - wsx) * wdx + (pz - wsz) * wdz) / (wallLen * wallLen);
-  const closestX = wsx + t * wdx;
-  const closestZ = wsz + t * wdz;
-  const dist = Math.sqrt((px - closestX) ** 2 + (pz - closestZ) ** 2);
-
-  if (dist < 0.3 && t >= -0.05 && t <= 1.05) {
-    return Math.max(0, Math.min(1, t));
+  for (const d of doors) {
+    const t = project(d.position, wsx, wsz, wdx, wdz, wLen);
+    if (t !== null) out.push({ type: "door", t, width: d.width, height: d.height, bottomY: 0 });
   }
+  for (const w of windows) {
+    const t = project(w.position, wsx, wsz, wdx, wdz, wLen);
+    if (t !== null) out.push({ type: "window", t, width: w.width, height: w.height, bottomY: w.sillHeight });
+  }
+  out.sort((a, b) => a.t - b.t);
+  return out;
+}
+
+function project(
+  pt: [number, number],
+  wsx: number, wsz: number, wdx: number, wdz: number, wLen: number
+): number | null {
+  const t = ((pt[0] - wsx) * wdx + (pt[1] - wsz) * wdz) / (wLen * wLen);
+  const cx = wsx + t * wdx;
+  const cz = wsz + t * wdz;
+  const dist = Math.hypot(pt[0] - cx, pt[1] - cz);
+  if (dist < 0.35 && t >= -0.05 && t <= 1.05) return Math.max(0, Math.min(1, t));
   return null;
 }
 
-function createSegmentedWall(
-  wall: WallSegment,
-  openings: WallOpening[],
-  sx: number, sz: number,
-  dx: number, dz: number,
-  totalLength: number,
-  angle: number,
-  group: THREE.Group
+function addWallWithOpenings(
+  sx: number, sz: number, dx: number, dz: number,
+  totalLen: number, angle: number, wall: WallSegment,
+  openings: Opening[], group: THREE.Group
 ) {
-  const mat = new THREE.MeshStandardMaterial({
-    color: wall.isExterior ? COLORS.wallExterior : COLORS.wallInterior,
+  const mat = wallMaterial(wall.isExterior);
+  let curT = 0;
+
+  for (const op of openings) {
+    const halfW = op.width / (2 * totalLen);
+    const opStart = Math.max(0, op.t - halfW);
+    const opEnd = Math.min(1, op.t + halfW);
+
+    if (opStart > curT + 0.005) {
+      const len = (opStart - curT) * totalLen;
+      const midT = (curT + opStart) / 2;
+      addSegment(sx + midT * dx, sz + midT * dz, len, wall.height, wall.thickness, angle, mat, wall.isExterior, group);
+    }
+
+    const posX = sx + op.t * dx;
+    const posZ = sz + op.t * dz;
+
+    if (op.type === "window") {
+      if (op.bottomY > 0.05)
+        addSegment(posX, posZ, op.width, op.bottomY, wall.thickness, angle, mat, wall.isExterior, group, 0);
+      const topY = op.bottomY + op.height;
+      if (topY < wall.height - 0.05)
+        addSegment(posX, posZ, op.width, wall.height - topY, wall.thickness, angle, mat, wall.isExterior, group, topY);
+      addWindowGlass(posX, posZ, op.width, op.height, op.bottomY, angle, group);
+    }
+
+    if (op.type === "door") {
+      if (op.height < wall.height - 0.05)
+        addSegment(posX, posZ, op.width, wall.height - op.height, wall.thickness, angle, mat, wall.isExterior, group, op.height);
+      addDoorPanel(posX, posZ, op.width, op.height, angle, group);
+    }
+
+    curT = opEnd;
+  }
+
+  if (curT < 0.995) {
+    const len = (1 - curT) * totalLen;
+    const midT = (curT + 1) / 2;
+    addSegment(sx + midT * dx, sz + midT * dz, len, wall.height, wall.thickness, angle, mat, wall.isExterior, group);
+  }
+}
+
+function wallMaterial(isExterior: boolean) {
+  return new THREE.MeshStandardMaterial({
+    color: isExterior ? COLORS.wallExterior : COLORS.wallInterior,
     transparent: true,
     opacity: 0.7,
     roughness: 0.6,
   });
-
-  let currentT = 0;
-
-  openings.forEach((opening) => {
-    const openingHalfWidth = opening.width / (2 * totalLength);
-    const openingStart = opening.positionAlongWall - openingHalfWidth;
-    const openingEnd = opening.positionAlongWall + openingHalfWidth;
-
-    if (openingStart > currentT + 0.01) {
-      const segLen = (openingStart - currentT) * totalLength;
-      const segMidT = (currentT + openingStart) / 2;
-      createWallSegment(sx + segMidT * dx, sz + segMidT * dz, segLen, wall.height, wall.thickness, angle, mat, wall.isExterior, group);
-    }
-
-    const segLen = opening.width;
-    const segMidT = opening.positionAlongWall;
-    const posX = sx + segMidT * dx;
-    const posZ = sz + segMidT * dz;
-
-    if (opening.type === "window") {
-      if (opening.bottomY > 0.05) {
-        createWallSegment(posX, posZ, segLen, opening.bottomY, wall.thickness, angle, mat, wall.isExterior, group, 0);
-      }
-      const topOfWindow = opening.bottomY + opening.height;
-      if (topOfWindow < wall.height - 0.05) {
-        createWallSegment(posX, posZ, segLen, wall.height - topOfWindow, wall.thickness, angle, mat, wall.isExterior, group, topOfWindow);
-      }
-      createWindowMesh(posX, posZ, segLen, opening.height, opening.bottomY, angle, group);
-    }
-
-    if (opening.type === "door") {
-      if (opening.height < wall.height - 0.05) {
-        createWallSegment(posX, posZ, segLen, wall.height - opening.height, wall.thickness, angle, mat, wall.isExterior, group, opening.height);
-      }
-      createDoorFrame(posX, posZ, segLen, opening.height, angle, group);
-    }
-
-    currentT = openingEnd;
-  });
-
-  if (currentT < 0.99) {
-    const segLen = (1 - currentT) * totalLength;
-    const segMidT = (currentT + 1) / 2;
-    createWallSegment(sx + segMidT * dx, sz + segMidT * dz, segLen, wall.height, wall.thickness, angle, mat, wall.isExterior, group);
-  }
 }
 
-function createWallSegment(
-  x: number, z: number,
-  length: number, height: number, thickness: number,
-  angle: number, material: THREE.Material,
-  isExterior: boolean, group: THREE.Group,
-  baseY: number = 0
+function addSegment(
+  x: number, z: number, length: number, height: number, thickness: number,
+  angle: number, material: THREE.Material, isExterior: boolean,
+  group: THREE.Group, baseY = 0
 ) {
   const geo = new THREE.BoxGeometry(length, height, thickness);
   const mesh = new THREE.Mesh(geo, material);
@@ -274,152 +237,127 @@ function createWallSegment(
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   group.add(mesh);
-  addWallEdges(mesh, length, height, thickness, isExterior);
+  addEdges(mesh, length, height, thickness, isExterior);
 }
 
-function addWallEdges(parent: THREE.Mesh, length: number, height: number, thickness: number, isExterior: boolean) {
-  const edgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(length + 0.01, height + 0.01, thickness + 0.01));
-  const edgesMat = new THREE.LineBasicMaterial({
-    color: isExterior ? COLORS.wallEdge : 0x336688,
+function addEdges(parent: THREE.Mesh, l: number, h: number, t: number, isExt: boolean) {
+  const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(l + 0.01, h + 0.01, t + 0.01));
+  const mat = new THREE.LineBasicMaterial({
+    color: isExt ? COLORS.wallEdge : 0x336688,
     transparent: true,
-    opacity: isExterior ? 0.6 : 0.3,
+    opacity: isExt ? 0.6 : 0.3,
   });
-  parent.add(new THREE.LineSegments(edgesGeo, edgesMat));
+  parent.add(new THREE.LineSegments(geo, mat));
 }
 
-function createWindowMesh(x: number, z: number, width: number, height: number, sillHeight: number, angle: number, group: THREE.Group) {
-  const geo = new THREE.PlaneGeometry(width, height);
+function addWindowGlass(x: number, z: number, w: number, h: number, sill: number, angle: number, group: THREE.Group) {
+  const geo = new THREE.PlaneGeometry(w, h);
   const mat = new THREE.MeshStandardMaterial({
-    color: COLORS.windowGlass,
-    transparent: true,
-    opacity: 0.3,
-    side: THREE.DoubleSide,
-    roughness: 0.1,
-    metalness: 0.5,
+    color: COLORS.windowGlass, transparent: true, opacity: 0.3,
+    side: THREE.DoubleSide, roughness: 0.1, metalness: 0.5,
   });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, sillHeight + height / 2, z);
+  mesh.position.set(x, sill + h / 2, z);
   mesh.rotation.y = -angle;
   group.add(mesh);
 
-  const frameGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(width, height));
-  const frameMat = new THREE.LineBasicMaterial({ color: COLORS.window, linewidth: 2 });
-  mesh.add(new THREE.LineSegments(frameGeo, frameMat));
-
-  // Cross bars
+  mesh.add(new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, h)),
+    new THREE.LineBasicMaterial({ color: COLORS.window })
+  ));
   const barMat = new THREE.LineBasicMaterial({ color: COLORS.window, transparent: true, opacity: 0.6 });
-  const hGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-width / 2, 0, 0.01), new THREE.Vector3(width / 2, 0, 0.01)]);
-  mesh.add(new THREE.Line(hGeo, barMat));
-  const vGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -height / 2, 0.01), new THREE.Vector3(0, height / 2, 0.01)]);
-  mesh.add(new THREE.Line(vGeo, barMat));
+  mesh.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-w / 2, 0, 0.01), new THREE.Vector3(w / 2, 0, 0.01)]),
+    barMat
+  ));
+  mesh.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -h / 2, 0.01), new THREE.Vector3(0, h / 2, 0.01)]),
+    barMat
+  ));
 }
 
-function createDoorFrame(x: number, z: number, width: number, height: number, angle: number, group: THREE.Group) {
-  // Door panel (slightly open)
-  const panelGeo = new THREE.PlaneGeometry(width * 0.95, height * 0.95);
+function addDoorPanel(x: number, z: number, w: number, h: number, angle: number, group: THREE.Group) {
   const panelMat = new THREE.MeshStandardMaterial({
-    color: 0x8B6914,
-    transparent: true,
-    opacity: 0.5,
-    side: THREE.DoubleSide,
-    roughness: 0.7,
+    color: 0x8B6914, transparent: true, opacity: 0.5,
+    side: THREE.DoubleSide, roughness: 0.7,
   });
-  const panel = new THREE.Mesh(panelGeo, panelMat);
-  panel.position.set(x, height / 2, z);
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.95, h * 0.95), panelMat);
+  panel.position.set(x, h / 2, z);
   panel.rotation.y = -angle + 0.4;
   group.add(panel);
 
-  // Door frame outline
-  const frameShape = new THREE.Shape();
-  frameShape.moveTo(-width / 2, 0);
-  frameShape.lineTo(-width / 2, height);
-  frameShape.lineTo(width / 2, height);
-  frameShape.lineTo(width / 2, 0);
-  const framePoints = frameShape.getPoints(20);
-  const frameGeo = new THREE.BufferGeometry().setFromPoints(framePoints.map((p) => new THREE.Vector3(p.x, p.y, 0)));
-  const frameLine = new THREE.Line(frameGeo, new THREE.LineBasicMaterial({ color: COLORS.door }));
-  frameLine.position.set(x, 0, z);
-  frameLine.rotation.y = -angle;
-  group.add(frameLine);
+  const pts = [
+    new THREE.Vector3(-w / 2, 0, 0), new THREE.Vector3(-w / 2, h, 0),
+    new THREE.Vector3(w / 2, h, 0), new THREE.Vector3(w / 2, 0, 0),
+  ];
+  const frameGeo = new THREE.BufferGeometry().setFromPoints(pts);
+  const frame = new THREE.Line(frameGeo, new THREE.LineBasicMaterial({ color: COLORS.door }));
+  frame.position.set(x, 0, z);
+  frame.rotation.y = -angle;
+  group.add(frame);
 }
 
-/**
- * Create internal staircase inside the reception
- */
+// ─── Internal Staircase ──────────────────────────────────────
+
 export function createStairs(): THREE.Group {
   const group = new THREE.Group();
-
   const s = internalStairs;
   const [baseX, baseZ] = toWorld(s.x, s.z);
-  const stepCount = s.stepCount;
-  const stepWidth = s.width;
-  const stepDepth = s.depth / stepCount;
-  const stepHeight = WALL_HEIGHT / stepCount;
+  const stepDepth = s.treadsDepth / s.stepCount;
+  const stepHeight = WALL_HEIGHT / s.stepCount;
 
-  const stepMat = new THREE.MeshStandardMaterial({
-    color: COLORS.stairs,
-    roughness: 0.7,
-  });
+  const stepMat = new THREE.MeshStandardMaterial({ color: COLORS.stairs, roughness: 0.7 });
 
-  for (let i = 0; i < stepCount; i++) {
-    const geo = new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth * 0.9);
+  // Render stair treads
+  for (let i = 0; i < s.stepCount; i++) {
+    const geo = new THREE.BoxGeometry(s.width * 0.9, stepHeight, stepDepth * 0.85);
     const step = new THREE.Mesh(geo, stepMat);
     step.position.set(
-      baseX + stepWidth / 2,
+      baseX + s.width / 2,
       stepHeight * i + stepHeight / 2,
       baseZ + i * stepDepth + stepDepth / 2
     );
     step.castShadow = true;
     step.receiveShadow = true;
     group.add(step);
-
-    // Step edge highlight
-    const edgeGeo = new THREE.EdgesGeometry(geo);
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x667788, transparent: true, opacity: 0.4 });
-    step.add(new THREE.LineSegments(edgeGeo, edgeMat));
+    step.add(new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ color: 0x667788, transparent: true, opacity: 0.4 })
+    ));
   }
 
-  // Staircase outline (dashed rectangle on floor)
-  const [outlineX, outlineZ] = toWorld(s.x, s.z);
-  const [outlineX2, outlineZ2] = toWorld(s.x + s.width, s.z + s.depth);
-  const outlinePoints = [
-    new THREE.Vector3(outlineX, 0.02, outlineZ),
-    new THREE.Vector3(outlineX2, 0.02, outlineZ),
-    new THREE.Vector3(outlineX2, 0.02, outlineZ2),
-    new THREE.Vector3(outlineX, 0.02, outlineZ2),
-    new THREE.Vector3(outlineX, 0.02, outlineZ),
+  // Dashed outline on floor (full void rectangle)
+  const [ox1, oz1] = toWorld(s.x, s.z);
+  const [ox2, oz2] = toWorld(s.x + s.width, s.z + s.depth);
+  const outlinePts = [
+    new THREE.Vector3(ox1, 0.02, oz1),
+    new THREE.Vector3(ox2, 0.02, oz1),
+    new THREE.Vector3(ox2, 0.02, oz2),
+    new THREE.Vector3(ox1, 0.02, oz2),
+    new THREE.Vector3(ox1, 0.02, oz1),
   ];
-  const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
-  const outlineMat = new THREE.LineDashedMaterial({
-    color: 0x00d4ff,
-    dashSize: 0.3,
-    gapSize: 0.15,
-    transparent: true,
-    opacity: 0.5,
-  });
-  const outline = new THREE.Line(outlineGeo, outlineMat);
-  outline.computeLineDistances();
-  group.add(outline);
+  const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePts);
+  const outlineLine = new THREE.Line(outlineGeo, new THREE.LineDashedMaterial({
+    color: 0x00d4ff, dashSize: 0.3, gapSize: 0.15, transparent: true, opacity: 0.5,
+  }));
+  outlineLine.computeLineDistances();
+  group.add(outlineLine);
 
-  // "Stairs" label
+  // Label
+  const [lx, lz] = toWorld(s.x + s.width / 2, s.z + s.treadsDepth / 2);
   const sprite = makeTextSprite("Internal Stairs", {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#a0aec0",
-    backgroundColor: "rgba(0,0,0,0.4)",
-    padding: 8,
+    fontSize: 36, fontWeight: "bold", color: "#a0aec0",
+    backgroundColor: "rgba(0,0,0,0.4)", padding: 8,
   });
-  const [labelX, labelZ] = toWorld(s.x + s.width / 2, s.z + s.depth / 2);
-  sprite.position.set(labelX, 1.8, labelZ);
+  sprite.position.set(lx, 2.0, lz);
   sprite.scale.set(2.5, 0.8, 1);
   group.add(sprite);
 
   return group;
 }
 
-/**
- * Create room labels as sprites
- */
+// ─── Labels ──────────────────────────────────────────────────
+
 export function createLabels(): THREE.Group {
   const group = new THREE.Group();
 
@@ -427,22 +365,17 @@ export function createLabels(): THREE.Group {
     const [lx, lz] = toWorld(room.labelPosition[0], room.labelPosition[1]);
 
     const nameSprite = makeTextSprite(room.name, {
-      fontSize: 48,
-      fontWeight: "bold",
-      color: "#ffffff",
-      backgroundColor: "rgba(0,0,0,0.5)",
-      padding: 12,
+      fontSize: 48, fontWeight: "bold", color: "#ffffff",
+      backgroundColor: "rgba(0,0,0,0.5)", padding: 12,
     });
     nameSprite.position.set(lx, 0.15, lz);
     nameSprite.scale.set(2.5, 1.0, 1);
     group.add(nameSprite);
 
-    if (room.dimensions) {
+    if (room.dimensions && room.dimensions !== room.name) {
       const dimSprite = makeTextSprite(room.dimensions, {
-        fontSize: 32,
-        color: "#00d4ff",
-        backgroundColor: "rgba(0,0,0,0.3)",
-        padding: 8,
+        fontSize: 32, color: "#00d4ff",
+        backgroundColor: "rgba(0,0,0,0.3)", padding: 8,
       });
       dimSprite.position.set(lx, 0.1, lz + 0.6);
       dimSprite.scale.set(2.0, 0.6, 1);
@@ -453,97 +386,102 @@ export function createLabels(): THREE.Group {
   return group;
 }
 
-interface SpriteOptions {
-  fontSize?: number;
-  fontWeight?: string;
-  color?: string;
-  backgroundColor?: string;
-  padding?: number;
-}
+// ─── Dimension Lines ─────────────────────────────────────────
 
-function makeTextSprite(text: string, opts: SpriteOptions = {}): THREE.Sprite {
-  const { fontSize = 36, fontWeight = "normal", color = "#ffffff", backgroundColor = "rgba(0,0,0,0.5)", padding = 10 } = opts;
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d")!;
-
-  ctx.font = `${fontWeight} ${fontSize}px 'JetBrains Mono', 'Courier New', monospace`;
-  const metrics = ctx.measureText(text);
-  const textWidth = metrics.width;
-
-  canvas.width = textWidth + padding * 2;
-  canvas.height = fontSize + padding * 2;
-
-  ctx.fillStyle = backgroundColor;
-  ctx.roundRect(0, 0, canvas.width, canvas.height, 6);
-  ctx.fill();
-
-  ctx.font = `${fontWeight} ${fontSize}px 'JetBrains Mono', 'Courier New', monospace`;
-  ctx.fillStyle = color;
-  ctx.textBaseline = "middle";
-  ctx.textAlign = "center";
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.minFilter = THREE.LinearFilter;
-
-  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-  return new THREE.Sprite(mat);
-}
-
-/**
- * Create dimension lines in 3D space
- */
 export function createDimensionLines(): THREE.Group {
   const group = new THREE.Group();
 
-  const dimensionData = [
-    { start: [0, 0] as [number, number], end: [5.78, 0] as [number, number], label: "5.78m", offset: -0.8 },
-    { start: [0, 0] as [number, number], end: [0, 11.72] as [number, number], label: "11.72m", offset: -0.8 },
-    { start: [5.88, 11.72] as [number, number], end: [10.0, 11.72] as [number, number], label: "4.12m", offset: 0.8 },
-    { start: [10.0, 8.41] as [number, number], end: [10.0, 11.72] as [number, number], label: "3.31m", offset: 0.8 },
-    { start: [5.88, 5.5] as [number, number], end: [8.59, 5.5] as [number, number], label: "2.71m", offset: -0.5 },
-    { start: [0.8, 10.65] as [number, number], end: [4.73, 10.65] as [number, number], label: "3.93m", offset: 0.5 },
-    { start: [2.0, 5.5] as [number, number], end: [2.0, 10.65] as [number, number], label: "5.15m", offset: -0.5 },
+  const dims: { s: [number, number]; e: [number, number]; label: string; off: number }[] = [
+    // Reception top width: 5.78m
+    { s: [0, 0], e: [5.78, 0], label: "5.78m", off: -0.6 },
+    // Apartment full depth: 11.72m
+    { s: [0, 0], e: [0, 11.72], label: "11.72m", off: -0.8 },
+    // Kitchen width: 4.12m
+    { s: [5.98, 11.72], e: [10.10, 11.72], label: "4.12m", off: 0.6 },
+    // Kitchen depth: 3.31m
+    { s: [10.10, 8.41], e: [10.10, 11.72], label: "3.31m", off: 0.6 },
+    // Maid's room width: 2.71m
+    { s: [7.40, 2.18], e: [10.11, 2.18], label: "2.71m", off: -0.4 },
+    // Maid's room depth: 2.71m
+    { s: [10.11, 2.18], e: [10.11, 4.89], label: "2.71m", off: 0.5 },
+    // Stair void width: 5.15m
+    { s: [0.30, 0.80], e: [5.45, 0.80], label: "5.15m", off: -0.4 },
+    // Corridor width: 1.22m
+    { s: [5.98, 4.0], e: [7.20, 4.0], label: "1.22m", off: -0.3 },
+    // Dining area width: 3.93m
+    { s: [0.5, 10.0], e: [4.43, 10.0], label: "3.93m", off: 0.4 },
+    // Guest toilet: 1.98m
+    { s: [5.98, 0], e: [5.98, 1.98], label: "1.98m", off: -0.4 },
   ];
 
-  dimensionData.forEach((dim) => {
-    const [sx, sz] = toWorld(dim.start[0], dim.start[1]);
-    const [ex, ez] = toWorld(dim.end[0], dim.end[1]);
+  dims.forEach((d) => {
+    const [sx, sz] = toWorld(d.s[0], d.s[1]);
+    const [ex, ez] = toWorld(d.e[0], d.e[1]);
+    const isH = Math.abs(sz - ez) < 0.1;
+    const offX = isH ? 0 : d.off;
+    const offZ = isH ? d.off : 0;
 
-    const isHorizontal = Math.abs(sz - ez) < 0.1;
-    const offsetX = isHorizontal ? 0 : dim.offset;
-    const offsetZ = isHorizontal ? dim.offset : 0;
-
-    const points = [
-      new THREE.Vector3(sx + offsetX, 0.05, sz + offsetZ),
-      new THREE.Vector3(ex + offsetX, 0.05, ez + offsetZ),
-    ];
-    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.5 });
-    group.add(new THREE.Line(lineGeo, lineMat));
+    // Main line
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(sx + offX, 0.05, sz + offZ),
+        new THREE.Vector3(ex + offX, 0.05, ez + offZ),
+      ]),
+      new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.5 })
+    ));
 
     // Extension lines
     const extMat = new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.3 });
-    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(sx, 0.05, sz),
-      new THREE.Vector3(sx + offsetX, 0.05, sz + offsetZ),
-    ]), extMat));
-    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(ex, 0.05, ez),
-      new THREE.Vector3(ex + offsetX, 0.05, ez + offsetZ),
-    ]), extMat));
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(sx, 0.05, sz), new THREE.Vector3(sx + offX, 0.05, sz + offZ),
+      ]), extMat
+    ));
+    group.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(ex, 0.05, ez), new THREE.Vector3(ex + offX, 0.05, ez + offZ),
+      ]), extMat
+    ));
+
+    // End ticks
+    const tickLen = 0.15;
+    const tickMat = new THREE.LineBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.6 });
+    if (isH) {
+      group.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(sx + offX, 0.05, sz + offZ - tickLen),
+          new THREE.Vector3(sx + offX, 0.05, sz + offZ + tickLen),
+        ]), tickMat
+      ));
+      group.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(ex + offX, 0.05, ez + offZ - tickLen),
+          new THREE.Vector3(ex + offX, 0.05, ez + offZ + tickLen),
+        ]), tickMat
+      ));
+    } else {
+      group.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(sx + offX - tickLen, 0.05, sz + offZ),
+          new THREE.Vector3(sx + offX + tickLen, 0.05, sz + offZ),
+        ]), tickMat
+      ));
+      group.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(ex + offX - tickLen, 0.05, ez + offZ),
+          new THREE.Vector3(ex + offX + tickLen, 0.05, ez + offZ),
+        ]), tickMat
+      ));
+    }
 
     // Label
-    const midX = (sx + ex) / 2 + offsetX;
-    const midZ = (sz + ez) / 2 + offsetZ;
-    const sprite = makeTextSprite(dim.label, {
-      fontSize: 28,
-      color: "#00d4ff",
-      backgroundColor: "rgba(13,17,23,0.8)",
-      padding: 6,
+    const mx = (sx + ex) / 2 + offX;
+    const mz = (sz + ez) / 2 + offZ;
+    const sprite = makeTextSprite(d.label, {
+      fontSize: 28, color: "#00d4ff",
+      backgroundColor: "rgba(13,17,23,0.85)", padding: 6,
     });
-    sprite.position.set(midX, 0.2, midZ);
+    sprite.position.set(mx, 0.2, mz);
     sprite.scale.set(1.5, 0.5, 1);
     group.add(sprite);
   });
@@ -551,30 +489,57 @@ export function createDimensionLines(): THREE.Group {
   return group;
 }
 
-/**
- * Setup scene lighting
- */
+// ─── Lighting ────────────────────────────────────────────────
+
 export function setupLighting(scene: THREE.Scene) {
-  const ambient = new THREE.AmbientLight(0x334466, 0.8);
-  scene.add(ambient);
+  scene.add(new THREE.AmbientLight(0x334466, 0.8));
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-  dirLight.position.set(10, 15, 10);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
-  dirLight.shadow.camera.near = 0.5;
-  dirLight.shadow.camera.far = 50;
-  dirLight.shadow.camera.left = -15;
-  dirLight.shadow.camera.right = 15;
-  dirLight.shadow.camera.top = 15;
-  dirLight.shadow.camera.bottom = -15;
-  scene.add(dirLight);
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+  dir.position.set(10, 15, 10);
+  dir.castShadow = true;
+  dir.shadow.mapSize.set(2048, 2048);
+  dir.shadow.camera.near = 0.5;
+  dir.shadow.camera.far = 50;
+  dir.shadow.camera.left = -15;
+  dir.shadow.camera.right = 15;
+  dir.shadow.camera.top = 15;
+  dir.shadow.camera.bottom = -15;
+  scene.add(dir);
 
-  const fillLight = new THREE.DirectionalLight(0x4488aa, 0.4);
-  fillLight.position.set(-5, 8, -5);
-  scene.add(fillLight);
+  const fill = new THREE.DirectionalLight(0x4488aa, 0.4);
+  fill.position.set(-5, 8, -5);
+  scene.add(fill);
 
-  const hemiLight = new THREE.HemisphereLight(0x1a2a4a, 0x0a0a0a, 0.5);
-  scene.add(hemiLight);
+  scene.add(new THREE.HemisphereLight(0x1a2a4a, 0x0a0a0a, 0.5));
+}
+
+// ─── Text Sprite Helper ─────────────────────────────────────
+
+interface SpriteOpts {
+  fontSize?: number;
+  fontWeight?: string;
+  color?: string;
+  backgroundColor?: string;
+  padding?: number;
+}
+
+function makeTextSprite(text: string, opts: SpriteOpts = {}): THREE.Sprite {
+  const { fontSize = 36, fontWeight = "normal", color = "#fff", backgroundColor = "rgba(0,0,0,0.5)", padding = 10 } = opts;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = `${fontWeight} ${fontSize}px 'JetBrains Mono','Courier New',monospace`;
+  const tw = ctx.measureText(text).width;
+  canvas.width = tw + padding * 2;
+  canvas.height = fontSize + padding * 2;
+  ctx.fillStyle = backgroundColor;
+  ctx.roundRect(0, 0, canvas.width, canvas.height, 6);
+  ctx.fill();
+  ctx.font = `${fontWeight} ${fontSize}px 'JetBrains Mono','Courier New',monospace`;
+  ctx.fillStyle = color;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  return new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
 }
