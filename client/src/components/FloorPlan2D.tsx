@@ -8,18 +8,16 @@ import {
   receptionVoid,
   internalStairs,
   propertyBounds,
-  WALL_THICKNESS,
 } from "@/lib/floorPlanData";
 
 /**
  * 2D Top-Down Floor Plan Viewer
  * Interactive canvas with pan & zoom for verifying layout accuracy.
+ * Robust rendering that handles DPR and mobile devices.
  */
 
 const COLORS_2D: Record<string, string> = {
-  "Top Section": "#1a3d4d",
   Reception: "#1a4d2a",
-  Entrance: "#2a3a4a",
   "Guest Toilet": "#1a3a5c",
   Corridor: "#2a3a4a",
   "Internal Stairs": "#4a5568",
@@ -29,9 +27,7 @@ const COLORS_2D: Record<string, string> = {
 };
 
 const LABEL_COLORS: Record<string, string> = {
-  "Top Section": "#88ccdd",
   Reception: "#88dd88",
-  Entrance: "#aabbcc",
   "Guest Toilet": "#88aadd",
   Corridor: "#aabbcc",
   "Internal Stairs": "#aabbcc",
@@ -45,10 +41,12 @@ export default function FloorPlan2D() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showDims, setShowDims] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
+  const animFrameRef = useRef<number>(0);
 
   // Pan & zoom state
   const stateRef = useRef({
-    scale: 40, // pixels per meter
+    scale: 40,
     offsetX: 0,
     offsetY: 0,
     isPanning: false,
@@ -62,11 +60,17 @@ export default function FloorPlan2D() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { scale, offsetX, offsetY } = stateRef.current;
-    const W = canvas.width;
-    const H = canvas.height;
 
-    // Clear
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
+
+    if (W <= 0 || H <= 0) return;
+
+    const { scale, offsetX, offsetY } = stateRef.current;
+
+    // Reset transform and clear
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = "#0d1117";
     ctx.fillRect(0, 0, W, H);
 
@@ -140,7 +144,6 @@ export default function FloorPlan2D() {
       const len = Math.sqrt(dx * dx + dz * dz);
       if (len < 0.01) continue;
 
-      // Perpendicular direction for thickness
       const nx = -dz / len;
       const nz = dx / len;
       const ht = wall.thickness / 2;
@@ -164,7 +167,6 @@ export default function FloorPlan2D() {
       ctx.closePath();
       ctx.fill();
 
-      // Wall outline
       ctx.strokeStyle = wall.isExterior ? "#00d4ff" : "#336688";
       ctx.lineWidth = wall.isExterior ? 2 : 1;
       ctx.globalAlpha = wall.isExterior ? 0.8 : 0.5;
@@ -181,9 +183,7 @@ export default function FloorPlan2D() {
       ctx.globalAlpha = 0.8;
 
       if (door.wallDirection === "x") {
-        // Door on horizontal wall — gap in X direction
         ctx.fillRect(tx(px - hw), ty(pz) - 2, hw * 2 * scale, 4);
-        // Door swing arc
         ctx.strokeStyle = "#ff8800";
         ctx.lineWidth = 1.5;
         ctx.globalAlpha = 0.5;
@@ -191,9 +191,7 @@ export default function FloorPlan2D() {
         ctx.arc(tx(px - hw), ty(pz), hw * scale, -Math.PI / 2, 0);
         ctx.stroke();
       } else {
-        // Door on vertical wall — gap in Z direction
         ctx.fillRect(tx(px) - 2, ty(pz - hw), 4, hw * 2 * scale);
-        // Door swing arc
         ctx.strokeStyle = "#ff8800";
         ctx.lineWidth = 1.5;
         ctx.globalAlpha = 0.5;
@@ -218,7 +216,6 @@ export default function FloorPlan2D() {
         ctx.moveTo(tx(px - hw), ty(pz));
         ctx.lineTo(tx(px + hw), ty(pz));
         ctx.stroke();
-        // Double line for window
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(tx(px - hw), ty(pz) - 3);
@@ -249,14 +246,14 @@ export default function FloorPlan2D() {
         const cx = tx(lx);
         const cy = ty(lz);
 
-        ctx.font = "bold 13px 'JetBrains Mono', monospace";
+        ctx.font = `bold ${Math.max(11, Math.min(14, scale * 0.35))}px 'JetBrains Mono', monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillStyle = LABEL_COLORS[room.name] || "#ffffff";
         ctx.fillText(room.name, cx, cy - 8);
 
         if (room.dimensions) {
-          ctx.font = "11px 'JetBrains Mono', monospace";
+          ctx.font = `${Math.max(9, Math.min(12, scale * 0.28))}px 'JetBrains Mono', monospace`;
           ctx.fillStyle = "#00d4ff";
           ctx.globalAlpha = 0.7;
           ctx.fillText(room.dimensions, cx, cy + 8);
@@ -279,7 +276,6 @@ export default function FloorPlan2D() {
         const x2d = tx(ex2 + offX2);
         const y2d = ty(ez2 + offZ2);
 
-        // Main line
         ctx.strokeStyle = "#00d4ff";
         ctx.lineWidth = 1;
         ctx.globalAlpha = 0.5;
@@ -288,7 +284,6 @@ export default function FloorPlan2D() {
         ctx.lineTo(x2d, y2d);
         ctx.stroke();
 
-        // Extension lines
         ctx.globalAlpha = 0.3;
         ctx.beginPath();
         ctx.moveTo(tx(sx2), ty(sz2));
@@ -297,7 +292,6 @@ export default function FloorPlan2D() {
         ctx.lineTo(x2d, y2d);
         ctx.stroke();
 
-        // End ticks
         const tickPx = 6;
         ctx.globalAlpha = 0.6;
         if (isH) {
@@ -316,7 +310,6 @@ export default function FloorPlan2D() {
           ctx.stroke();
         }
 
-        // Label
         const mx = (x1d + x2d) / 2;
         const my = (y1d + y2d) / 2;
         ctx.font = "10px 'JetBrains Mono', monospace";
@@ -350,7 +343,7 @@ export default function FloorPlan2D() {
     // ── Scale bar ──
     const sbY = H - 25;
     const sbX = 20;
-    const sbLen = 1 * scale; // 1 meter
+    const sbLen = 1 * scale;
     ctx.strokeStyle = "#00d4ff";
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.7;
@@ -369,39 +362,52 @@ export default function FloorPlan2D() {
     ctx.globalAlpha = 1;
   }, [showDims, showLabels]);
 
-  // Resize handler
-  useEffect(() => {
-    const resize = () => {
-      const canvas = canvasRef.current;
-      const container = containerRef.current;
-      if (!canvas || !container) return;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = container.clientWidth * dpr;
-      canvas.height = container.clientHeight * dpr;
-      canvas.style.width = container.clientWidth + "px";
-      canvas.style.height = container.clientHeight + "px";
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.scale(dpr, dpr);
+  // Setup canvas and handle resize
+  const setupCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
 
-      // Auto-fit scale
-      const propW = propertyBounds.maxX - propertyBounds.minX;
-      const propH = propertyBounds.maxZ - propertyBounds.minZ;
-      const padding = 60;
-      const fitScale = Math.min(
-        (container.clientWidth - padding * 2) / propW,
-        (container.clientHeight - padding * 2) / propH
-      );
-      stateRef.current.scale = fitScale;
-      stateRef.current.offsetX = 0;
-      stateRef.current.offsetY = 0;
-      draw();
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = rect.width;
+    const h = rect.height;
+
+    if (w <= 0 || h <= 0) return;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+
+    // Auto-fit scale
+    const propW = propertyBounds.maxX - propertyBounds.minX;
+    const propH = propertyBounds.maxZ - propertyBounds.minZ;
+    const padding = 60;
+    const fitScale = Math.min(
+      (w - padding * 2) / propW,
+      (h - padding * 2) / propH
+    );
+    stateRef.current.scale = fitScale;
+    stateRef.current.offsetX = 0;
+    stateRef.current.offsetY = 0;
+
+    setCanvasSize({ w, h });
+    draw();
   }, [draw]);
 
-  // Redraw on toggle
+  // Initial setup + resize listener
+  useEffect(() => {
+    // Delay initial draw slightly to ensure container is laid out
+    const timer = setTimeout(setupCanvas, 50);
+    window.addEventListener("resize", setupCanvas);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", setupCanvas);
+    };
+  }, [setupCanvas]);
+
+  // Redraw on toggle changes
   useEffect(() => {
     draw();
   }, [draw, showDims, showLabels]);
@@ -412,12 +418,17 @@ export default function FloorPlan2D() {
     if (!canvas) return;
     const st = stateRef.current;
 
+    const requestDraw = () => {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = requestAnimationFrame(draw);
+    };
+
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
       st.scale *= factor;
       st.scale = Math.max(10, Math.min(200, st.scale));
-      draw();
+      requestDraw();
     };
 
     const onMouseDown = (e: MouseEvent) => {
@@ -431,7 +442,7 @@ export default function FloorPlan2D() {
       st.offsetY += e.clientY - st.lastY;
       st.lastX = e.clientX;
       st.lastY = e.clientY;
-      draw();
+      requestDraw();
     };
     const onMouseUp = () => {
       st.isPanning = false;
@@ -456,7 +467,7 @@ export default function FloorPlan2D() {
         st.offsetY += e.touches[0].clientY - st.lastY;
         st.lastX = e.touches[0].clientX;
         st.lastY = e.touches[0].clientY;
-        draw();
+        requestDraw();
       } else if (e.touches.length === 2) {
         const dx = e.touches[0].clientX - e.touches[1].clientX;
         const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -465,7 +476,7 @@ export default function FloorPlan2D() {
           const factor = dist / st.lastPinchDist;
           st.scale *= factor;
           st.scale = Math.max(10, Math.min(200, st.scale));
-          draw();
+          requestDraw();
         }
         st.lastPinchDist = dist;
       }
@@ -491,23 +502,39 @@ export default function FloorPlan2D() {
       canvas.removeEventListener("touchstart", onTouchStart);
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchend", onTouchEnd);
+      cancelAnimationFrame(animFrameRef.current);
     };
   }, [draw]);
 
   return (
-    <div ref={containerRef} className="relative w-full h-screen bg-[#0d1117] overflow-hidden">
-      <canvas ref={canvasRef} className="block w-full h-full" />
+    <div
+      ref={containerRef}
+      className="relative w-full overflow-hidden"
+      style={{
+        height: "100dvh",
+        backgroundColor: "#0d1117",
+        touchAction: "none",
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: "block",
+          width: "100%",
+          height: "100%",
+        }}
+      />
 
       {/* Title */}
-      <div className="absolute top-4 left-4 z-10">
+      <div className="absolute top-3 left-3 z-10 sm:top-4 sm:left-4">
         <h1
-          className="text-white text-lg font-bold tracking-wider"
+          className="text-white text-sm sm:text-lg font-bold tracking-wider"
           style={{ fontFamily: "'JetBrains Mono', monospace" }}
         >
           TYPE DU1 — GROUND FLOOR
         </h1>
         <p
-          className="text-cyan-400 text-xs mt-1"
+          className="text-cyan-400 text-[10px] sm:text-xs mt-1"
           style={{ fontFamily: "'JetBrains Mono', monospace" }}
         >
           2D Verification View · True to Scale
@@ -515,10 +542,10 @@ export default function FloorPlan2D() {
       </div>
 
       {/* Controls */}
-      <div className="absolute bottom-4 left-4 z-10 flex gap-2">
+      <div className="absolute bottom-3 left-3 z-10 flex gap-2 sm:bottom-4 sm:left-4">
         <button
           onClick={() => setShowDims((v) => !v)}
-          className={`px-3 py-1.5 text-xs font-mono rounded border transition-colors ${
+          className={`px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-mono rounded border transition-colors ${
             showDims
               ? "bg-cyan-900/50 border-cyan-500 text-cyan-300"
               : "bg-gray-900/50 border-gray-600 text-gray-400"
@@ -528,7 +555,7 @@ export default function FloorPlan2D() {
         </button>
         <button
           onClick={() => setShowLabels((v) => !v)}
-          className={`px-3 py-1.5 text-xs font-mono rounded border transition-colors ${
+          className={`px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-mono rounded border transition-colors ${
             showLabels
               ? "bg-cyan-900/50 border-cyan-500 text-cyan-300"
               : "bg-gray-900/50 border-gray-600 text-gray-400"
@@ -537,31 +564,16 @@ export default function FloorPlan2D() {
           Labels
         </button>
         <button
-          onClick={() => {
-            stateRef.current.offsetX = 0;
-            stateRef.current.offsetY = 0;
-            // Reset scale
-            const container = containerRef.current;
-            if (container) {
-              const propW = propertyBounds.maxX - propertyBounds.minX;
-              const propH = propertyBounds.maxZ - propertyBounds.minZ;
-              const padding = 60;
-              stateRef.current.scale = Math.min(
-                (container.clientWidth - padding * 2) / propW,
-                (container.clientHeight - padding * 2) / propH
-              );
-            }
-            draw();
-          }}
-          className="px-3 py-1.5 text-xs font-mono rounded border bg-gray-900/50 border-gray-600 text-gray-400 hover:border-cyan-500 hover:text-cyan-300 transition-colors"
+          onClick={setupCanvas}
+          className="px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-mono rounded border bg-gray-900/50 border-gray-600 text-gray-400 hover:border-cyan-500 hover:text-cyan-300 transition-colors"
         >
           Reset
         </button>
       </div>
 
-      {/* Legend */}
+      {/* Legend - hidden on very small screens */}
       <div
-        className="absolute top-4 right-4 z-10 bg-gray-900/80 border border-gray-700 rounded-lg p-3 text-xs"
+        className="absolute top-3 right-3 z-10 bg-gray-900/80 border border-gray-700 rounded-lg p-2 sm:p-3 text-[10px] sm:text-xs hidden sm:block"
         style={{ fontFamily: "'JetBrains Mono', monospace" }}
       >
         <div className="text-gray-300 font-bold mb-2">LEGEND</div>
@@ -595,7 +607,7 @@ export default function FloorPlan2D() {
 
       {/* Instructions */}
       <div
-        className="absolute bottom-4 right-4 z-10 text-gray-500 text-xs"
+        className="absolute bottom-3 right-3 z-10 text-gray-500 text-[10px] sm:text-xs sm:bottom-4 sm:right-4"
         style={{ fontFamily: "'JetBrains Mono', monospace" }}
       >
         Scroll to zoom · Drag to pan

@@ -1,15 +1,12 @@
-# TODO - 2D Verification First Approach
+# Corrections TODO - Round 4
 
-## Step 1: Create 2D top-down plan
-- [ ] Build interactive 2D canvas/SVG floor plan viewer
-- [ ] Apply all corrections from user annotations:
-  - Internal stairs are on the RIGHT side (between guest toilet and maid's room), NOT in reception
-  - Missing top section above reception (marker 2, with 5.78m dimension and sink/counter)
-  - Entrance door at top-right (marker 3, door arc visible)
-  - External staircase (marker 4) is OUTSIDE — do not render
-  - Dashed rectangle in reception is NOT stairs (likely double-height void or terrace)
-- [ ] Show all dimensions, room labels, doors, windows
-- [ ] Get user confirmation that layout is correct
+## Issues identified by user:
+- [ ] "Top Section" and "Entrance" are NOT separate rooms — they are all part of the Reception
+- [ ] The Reception extends from the top of the apartment all the way down (full height on the left side)
+- [ ] The stairs are between the Guest Toilet and the entrance/reception — at the TOP of the right-side column
+- [ ] Re-analyze the floor plan image carefully to get the correct layout
 
-## Step 2: Convert to 3D
-- [ ] Once 2D is confirmed, rebuild 3D model from verified data
+## Corrected understanding:
+- The left side is one large Reception room spanning the full apartment height
+- The right side has (from top to bottom): Stairs, Guest Toilet, Maid's Room, Kitchen
+- The entrance door is at the top, opening into the reception
