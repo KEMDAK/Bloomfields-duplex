@@ -252,10 +252,16 @@ export default function FloorPlanViewer() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-white/60" />
               </div>
             </div>
-            {/* Controls hint */}
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none">
+            {/* Controls hint - desktop */}
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none hidden sm:block">
               <div className="bg-black/70 backdrop-blur-sm border border-gray-600/50 rounded-lg px-4 py-2 font-mono text-[11px] text-gray-300 text-center">
                 <span className="text-emerald-400">WASD</span> Move &nbsp;·&nbsp; <span className="text-emerald-400">Mouse</span> Look &nbsp;·&nbsp; <span className="text-emerald-400">ESC</span> Exit
+              </div>
+            </div>
+            {/* Controls hint - mobile */}
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 pointer-events-none sm:hidden">
+              <div className="bg-black/70 backdrop-blur-sm border border-gray-600/50 rounded-lg px-4 py-2 font-mono text-[11px] text-gray-300 text-center">
+                <span className="text-emerald-400">Joystick</span> Move &nbsp;·&nbsp; <span className="text-emerald-400">Drag</span> Look &nbsp;·&nbsp; <span className="text-red-400">✕</span> Exit
               </div>
             </div>
           </>
