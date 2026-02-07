@@ -16,7 +16,7 @@ function toWorld(x: number, z: number): [number, number] {
   return [x - CENTER_X, z - CENTER_Z];
 }
 
-const EYE_HEIGHT = 1.6;
+const EYE_HEIGHT = 1.7;
 const MOVE_SPEED = 3.0; // meters per second
 const MOUSE_SENSITIVITY = 0.002;
 const TOUCH_LOOK_SENSITIVITY = 0.004;
@@ -269,12 +269,16 @@ export class POVController {
     this.moveLeft = false;
     this.moveRight = false;
 
+    // Always try to clean up mobile overlay (in case isMobile detection changed)
+    if (this.mobileOverlay) {
+      this.mobileOverlay.destroy();
+      this.mobileOverlay = null;
+    }
+    // Also force-remove any leftover overlay elements by ID
+    document.getElementById('pov-joystick')?.remove();
+    document.getElementById('pov-exit-btn')?.remove();
+
     if (this.isMobile) {
-      // Clean up mobile controls
-      if (this.mobileOverlay) {
-        this.mobileOverlay.destroy();
-        this.mobileOverlay = null;
-      }
       this.domElement.removeEventListener("touchstart", this.onTouchStart);
       this.domElement.removeEventListener("touchmove", this.onTouchMove);
       this.domElement.removeEventListener("touchend", this.onTouchEnd);
@@ -310,10 +314,14 @@ export class POVController {
 
     if (this.isMobile && this.mobileOverlay) {
       // Mobile: use joystick input
+      // Joystick: pushing up = negative z on screen = forward
+      // Joystick: pushing right = positive x on screen = right
       const jx = this.mobileOverlay.moveVec.x;
       const jz = this.mobileOverlay.moveVec.z;
       if (Math.abs(jx) > 0.1 || Math.abs(jz) > 0.1) {
-        this.velocity.x = -jx * MOVE_SPEED * 0.5;
+        // jx: positive = push right on screen = strafe right
+        // jz: positive = push down on screen = backward, so negate for forward
+        this.velocity.x = jx * MOVE_SPEED * 0.5;
         this.velocity.z = -jz * MOVE_SPEED * 0.5;
       }
     } else {
@@ -323,10 +331,10 @@ export class POVController {
       this.direction.normalize();
 
       if (this.moveForward || this.moveBackward) {
-        this.velocity.z -= this.direction.z * MOVE_SPEED * delta * 20;
+        this.velocity.z += this.direction.z * MOVE_SPEED * delta * 20;
       }
       if (this.moveLeft || this.moveRight) {
-        this.velocity.x -= this.direction.x * MOVE_SPEED * delta * 20;
+        this.velocity.x += this.direction.x * MOVE_SPEED * delta * 20;
       }
     }
 
@@ -339,8 +347,9 @@ export class POVController {
     const right = new THREE.Vector3();
     right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-    const moveX = right.x * (-this.velocity.x * delta) + forward.x * (-this.velocity.z * delta);
-    const moveZ = right.z * (-this.velocity.x * delta) + forward.z * (-this.velocity.z * delta);
+    // Forward: camera direction * velocity.z, Right: right direction * velocity.x
+    const moveX = right.x * (this.velocity.x * delta) + forward.x * (this.velocity.z * delta);
+    const moveZ = right.z * (this.velocity.x * delta) + forward.z * (this.velocity.z * delta);
 
     // Move freely — no wall collision
     this.camera.position.x += moveX;

@@ -918,6 +918,8 @@ function Scene3D({
   const realisticGroupRef = useRef<THREE.Group | null>(null);
   const schematicLightsRef = useRef<THREE.Group | null>(null);
   const realisticLightsRef = useRef<THREE.Group | null>(null);
+  const ceilingGroupRef = useRef<THREE.Group | null>(null);
+  const originalOpacities = useRef<Map<THREE.Material, { opacity: number; transparent: boolean }>>(new Map());
 
   const initScene = useCallback(() => {
     if (!containerRef.current || initRef.current) return;
@@ -1171,16 +1173,91 @@ function Scene3D({
       };
 
       // Widen FOV for immersion
-      camera.fov = 75;
+      camera.fov = 70;
+      camera.near = 0.05;
       camera.updateProjectionMatrix();
+
+      // Make walls and floors opaque for immersive feel
+      const scene = sceneRef.current;
+      if (scene) {
+        originalOpacities.current.clear();
+        scene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshStandardMaterial) {
+            const mat = obj.material;
+            originalOpacities.current.set(mat, { opacity: mat.opacity, transparent: mat.transparent });
+            if (mat.opacity < 1.0 && mat.opacity >= 0.3) {
+              mat.opacity = Math.min(1.0, mat.opacity + 0.4);
+              mat.transparent = mat.opacity < 1.0;
+              mat.needsUpdate = true;
+            }
+          }
+        });
+
+        // Add ceiling
+        if (!ceilingGroupRef.current) {
+          const ceilingGroup = new THREE.Group();
+          const ceilingMat = new THREE.MeshStandardMaterial({
+            color: 0xf5f5f0,
+            roughness: 0.9,
+            side: THREE.DoubleSide,
+          });
+          // Create ceiling planes for each room
+          const cx = (propertyBounds.minX + propertyBounds.maxX) / 2;
+          const cz = (propertyBounds.minZ + propertyBounds.maxZ) / 2;
+          for (const room of rooms) {
+            if (room.name === 'Garden') continue;
+            const shape = new THREE.Shape();
+            const sv = room.vertices[0];
+            shape.moveTo(sv[0] - cx, -(sv[1] - cz));
+            for (let i = 1; i < room.vertices.length; i++) {
+              const v = room.vertices[i];
+              shape.lineTo(v[0] - cx, -(v[1] - cz));
+            }
+            shape.closePath();
+            const geo = new THREE.ShapeGeometry(shape);
+            const mesh = new THREE.Mesh(geo, ceilingMat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.y = 3.0; // WALL_HEIGHT
+            ceilingGroup.add(mesh);
+          }
+          ceilingGroupRef.current = ceilingGroup;
+        }
+        scene.add(ceilingGroupRef.current);
+
+        // Remove fog for indoor feel
+        scene.fog = null;
+      }
+
       pov.enable();
     } else {
       // Disable POV
       if (povControllerRef.current && povControllerRef.current.enabled) {
         povControllerRef.current.disable();
       }
+
+      // Restore material opacities
+      originalOpacities.current.forEach((saved, mat) => {
+        if (mat instanceof THREE.MeshStandardMaterial) {
+          mat.opacity = saved.opacity;
+          mat.transparent = saved.transparent;
+          mat.needsUpdate = true;
+        }
+      });
+      originalOpacities.current.clear();
+
+      // Remove ceiling
+      if (ceilingGroupRef.current && sceneRef.current) {
+        sceneRef.current.remove(ceilingGroupRef.current);
+      }
+
+      // Restore fog
+      if (sceneRef.current) {
+        sceneRef.current.fog = new THREE.FogExp2(0x0d1117, 0.012);
+      }
+
       // Restore orbit
       camera.fov = 50;
+      camera.near = 0.1;
       camera.updateProjectionMatrix();
       camera.position.copy(savedCamPos.current);
       controls.target.copy(savedCamTarget.current);
