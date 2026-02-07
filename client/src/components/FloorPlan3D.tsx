@@ -1,6 +1,9 @@
 /**
- * FloorPlan3D - Interactive 3D floor plan viewer
- * Architectural Blueprint Aesthetic with full touch/mobile support
+ * FloorPlan3D - Interactive 3D floor plan viewer (CORRECTED)
+ * - L-shaped garden
+ * - Internal staircase in reception
+ * - No external elements
+ * - Full touch/mobile support
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
@@ -41,12 +44,12 @@ export default function FloorPlan3D() {
     // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d1117);
-    scene.fog = new THREE.FogExp2(0x0d1117, 0.015);
+    scene.fog = new THREE.FogExp2(0x0d1117, 0.012);
     sceneRef.current = scene;
 
     // Camera
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 100);
-    camera.position.set(12, 12, 12);
+    camera.position.set(14, 14, 14);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -72,12 +75,11 @@ export default function FloorPlan3D() {
     controls.minDistance = 3;
     controls.maxDistance = 35;
     controls.maxPolarAngle = Math.PI / 2.05;
-    controls.target.set(0, 0, 0);
+    controls.target.set(0, 0, 2);
     controls.enablePan = true;
     controls.panSpeed = 0.8;
     controls.rotateSpeed = 0.6;
     controls.zoomSpeed = 1.0;
-    // Touch settings
     controls.touches = {
       ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN,
@@ -108,15 +110,15 @@ export default function FloorPlan3D() {
     animate();
 
     // Intro animation
-    const startPos = { x: 20, y: 18, z: 20 };
-    const endPos = { x: 10, y: 10, z: 10 };
+    const startPos = { x: 22, y: 20, z: 22 };
+    const endPos = { x: 12, y: 12, z: 12 };
     const duration = 1500;
     const startTime = Date.now();
 
     const animateIntro = () => {
       const elapsed = Date.now() - startTime;
       const t = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      const ease = 1 - Math.pow(1 - t, 3);
 
       camera.position.set(
         startPos.x + (endPos.x - startPos.x) * ease,
@@ -159,65 +161,52 @@ export default function FloorPlan3D() {
     return cleanup;
   }, [initScene]);
 
-  // Toggle dimensions visibility
   useEffect(() => {
     if (dimensionGroupRef.current) {
       dimensionGroupRef.current.visible = showDimensions;
     }
   }, [showDimensions]);
 
-  // Toggle labels visibility
   useEffect(() => {
     if (labelGroupRef.current) {
       labelGroupRef.current.visible = showLabels;
     }
   }, [showLabels]);
 
-  // View mode switching
-  const switchView = useCallback(
-    (mode: ViewMode) => {
-      if (!cameraRef.current || !controlsRef.current) return;
-      const camera = cameraRef.current;
-      const controls = controlsRef.current;
+  const switchView = useCallback((mode: ViewMode) => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
 
-      setViewMode(mode);
+    setViewMode(mode);
 
-      const targetPos =
-        mode === "topdown"
-          ? new THREE.Vector3(0, 20, 0.01)
-          : new THREE.Vector3(10, 10, 10);
+    const targetPos = mode === "topdown"
+      ? new THREE.Vector3(0, 22, 0.01)
+      : new THREE.Vector3(12, 12, 12);
 
-      // Smooth camera transition
-      const startPos = camera.position.clone();
-      const duration = 800;
-      const startTime = Date.now();
+    const startPos = camera.position.clone();
+    const duration = 800;
+    const startTime = Date.now();
 
-      const animateView = () => {
-        const elapsed = Date.now() - startTime;
-        const t = Math.min(elapsed / duration, 1);
-        const ease = 1 - Math.pow(1 - t, 3);
-
-        camera.position.lerpVectors(startPos, targetPos, ease);
-        controls.update();
-
-        if (t < 1) {
-          requestAnimationFrame(animateView);
-        }
-      };
-      animateView();
-    },
-    []
-  );
+    const animateView = () => {
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      camera.position.lerpVectors(startPos, targetPos, ease);
+      controls.update();
+      if (t < 1) requestAnimationFrame(animateView);
+    };
+    animateView();
+  }, []);
 
   const resetView = useCallback(() => {
     if (!cameraRef.current || !controlsRef.current) return;
-    controlsRef.current.target.set(0, 0, 0);
+    controlsRef.current.target.set(0, 0, 2);
     switchView("perspective");
   }, [switchView]);
 
   return (
     <div className="relative w-full h-full" style={{ touchAction: "none" }}>
-      {/* 3D Canvas Container */}
       <div ref={containerRef} className="w-full h-full" />
 
       {/* Loading overlay */}
@@ -230,7 +219,7 @@ export default function FloorPlan3D() {
         </div>
       )}
 
-      {/* Top-left: Title */}
+      {/* Title */}
       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 pointer-events-none">
         <h1 className="text-white font-mono text-sm sm:text-base font-bold tracking-wider">
           TYPE DU1 — GROUND FLOOR
@@ -240,7 +229,7 @@ export default function FloorPlan3D() {
         </p>
       </div>
 
-      {/* Controls Panel - responsive */}
+      {/* Controls */}
       <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-auto z-10 flex flex-wrap gap-1.5 sm:gap-2">
         <button
           onClick={() => switchView("perspective")}
@@ -290,7 +279,7 @@ export default function FloorPlan3D() {
         </button>
       </div>
 
-      {/* Legend - hidden on very small screens */}
+      {/* Legend */}
       <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 hidden sm:block">
         <div className="bg-black/60 backdrop-blur-sm border border-gray-700/50 rounded-lg p-3 font-mono text-[11px]">
           <div className="text-gray-400 mb-2 font-bold text-xs">LEGEND</div>
@@ -299,9 +288,9 @@ export default function FloorPlan3D() {
             <LegendItem color="#5c3a1a" label="Kitchen" />
             <LegendItem color="#3a1a5c" label="Maid's Room" />
             <LegendItem color="#1a3a5c" label="Guest Toilet" />
-            <LegendItem color="#5c5c1a" label="Staircase" />
             <LegendItem color="#2a5c2a" label="Garden" />
             <div className="border-t border-gray-700/50 my-1.5" />
+            <LegendItem color="#4a5568" label="Internal Stairs" />
             <LegendItem color="#ffa500" label="Doors" />
             <LegendItem color="#4488ff" label="Windows" />
           </div>
@@ -330,10 +319,7 @@ export default function FloorPlan3D() {
 function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div
-        className="w-3 h-3 rounded-sm"
-        style={{ backgroundColor: color, opacity: 0.7 }}
-      />
+      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color, opacity: 0.7 }} />
       <span className="text-gray-300">{label}</span>
     </div>
   );

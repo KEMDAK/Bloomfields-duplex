@@ -1,19 +1,36 @@
 /**
- * Floor Plan Data - Type DU1 Ground Floor
+ * Floor Plan Data - Type DU1 Ground Floor (CORRECTED)
  * All dimensions in meters, true to scale from the architectural plan.
  * Coordinate system: X = width (left-right), Z = depth (top-bottom), Y = height
- * Origin (0,0) is at the top-left corner of the building exterior.
+ * Origin (0,0) is at the top-left corner of the apartment exterior.
+ *
+ * LAYOUT (looking from above, north = top):
+ * ┌─────────────────────────────────────┐
+ * │  Reception (upper)  │ GuestToilet   │
+ * │                     │───────────────│
+ * │  [internal stairs]  │ Maid's Room   │
+ * │                     │───────────────│
+ * │  Reception (lower/  │   Kitchen     │
+ * │   dining)           │               │
+ * ├─────────────────────┴───────────────┤
+ * │              Garden (bottom)         │
+ * │                                      │
+ * ├──────────┐                           │
+ * │  Garden  │                           │
+ * │  (left)  │                           │
+ * └──────────┘                           │ <- L-shaped garden wraps left + bottom
+ *
+ * The top-right staircase visible in the plan is a SHARED BUILDING staircase
+ * and is NOT part of this apartment — it is excluded from the model.
  */
 
-export const WALL_HEIGHT = 3.0; // Standard residential wall height
-export const WALL_THICKNESS = 0.2; // ~20cm wall thickness
+export const WALL_HEIGHT = 3.0;
+export const WALL_THICKNESS = 0.2;
 export const DOOR_HEIGHT = 2.4;
 export const DOOR_WIDTH_STANDARD = 0.9;
 export const WINDOW_HEIGHT = 1.2;
 export const WINDOW_SILL_HEIGHT = 0.9;
-export const WINDOW_WIDTH = 1.2;
 
-// Colors
 export const COLORS = {
   floor: 0x2a2a3e,
   wallExterior: 0x334455,
@@ -27,29 +44,28 @@ export const COLORS = {
   kitchen: 0x5c3a1a,
   maidsRoom: 0x3a1a5c,
   guestToilet: 0x1a3a5c,
-  staircase: 0x5c5c1a,
   garden: 0x2a5c2a,
+  stairs: 0x4a5568,
   label: 0xffffff,
 };
 
 export interface WallSegment {
-  start: [number, number]; // [x, z]
-  end: [number, number]; // [x, z]
+  start: [number, number];
+  end: [number, number];
   thickness: number;
   height: number;
   isExterior: boolean;
 }
 
 export interface DoorOpening {
-  position: [number, number]; // [x, z] center of door
+  position: [number, number];
   width: number;
   height: number;
-  wallDirection: "x" | "z"; // which axis the wall runs along
-  swingAngle?: number; // door swing direction in radians
+  wallDirection: "x" | "z";
 }
 
 export interface WindowOpening {
-  position: [number, number]; // [x, z] center of window
+  position: [number, number];
   width: number;
   height: number;
   sillHeight: number;
@@ -58,83 +74,53 @@ export interface WindowOpening {
 
 export interface Room {
   name: string;
-  vertices: [number, number][]; // floor polygon vertices [x, z]
+  vertices: [number, number][];
   color: number;
-  labelPosition: [number, number]; // [x, z] for text label
-  dimensions?: string; // display string
+  labelPosition: [number, number];
+  dimensions?: string;
 }
 
 // ============================================================
-// BUILDING GEOMETRY
-// Based on the floor plan image analysis:
-//
-// The building footprint (looking from top):
-// - Total width (left to right): ~11.72m (left wall) 
-// - The building has an L-shape configuration
-//
-// Layout from the plan (top = north in our model):
-// Top-left: Reception upper area (5.78m wide)
-// Top-right: Staircase + Guest toilet
-// Middle-left: Reception lower / dining area
-// Middle-right: Maid's room + bathroom
-// Bottom-left: Garden (outdoor)
-// Bottom-right: Kitchen
+// APARTMENT DIMENSIONS (from plan)
 // ============================================================
+// Reception top width: 5.78m
+// Reception left wall full depth: 11.72m
+// Dining area: 3.93m wide
+// Reception width at seating: 5.15m
+// Kitchen: 4.12m wide × 3.31m deep
+// Maid's room: 2.71m wide × ~2.71m deep
+// Guest toilet: ~1.22m × 1.22m (with small corridor 1.22m)
+// Corridor: 1.22m wide
+// Internal staircase (dashed): ~3.93m × 5.15m area in reception
 
-// Key reference points (all in meters from top-left corner of building):
-// The building exterior envelope:
-const B = {
-  // Exterior boundaries
-  leftX: 0,
-  topZ: 0,
-  
-  // Reception area top wall
-  receptionTopWidth: 5.78,
-  
-  // Right side of building
-  rightX: 10.0, // Total building width
-  
-  // Reception full depth on left side
-  receptionDepth: 11.72,
-  
-  // Interior partition positions
-  receptionRightWallX: 5.78, // Right wall of reception at top
-  kitchenRightX: 10.0,
-  
-  // Kitchen
-  kitchenWidth: 4.12,
-  kitchenDepth: 3.31,
-  
-  // Maid's room
-  maidsRoomWidth: 2.71,
-  maidsRoomDepth: 2.71,
-  
-  // Guest toilet
-  guestToiletWidth: 1.22,
-  guestToiletDepth: 1.22,
-  
-  // Staircase
-  staircaseWidth: 1.98,
-  
-  // Corridor
-  corridorWidth: 1.22,
-  
-  // Dining table area
-  diningWidth: 3.93,
-  
-  // Door/passage widths
-  passageWidth: 1.98,
-};
+// Apartment bounding box:
+// Width: 5.78 + 0.2 (wall) + corridor/rooms ≈ 10.0m
+// Depth: 11.72m
 
-// Computed positions
-const rightSideX = B.receptionTopWidth + 0.2; // After reception right wall
-const kitchenTopZ = B.receptionDepth - B.kitchenDepth;
-const kitchenLeftX = B.rightX - B.kitchenWidth;
-const maidsRoomLeftX = kitchenLeftX;
-const maidsRoomTopZ = kitchenTopZ - B.maidsRoomDepth - 0.2;
-const staircaseLeftX = B.rightX - B.staircaseWidth;
-const guestToiletLeftX = maidsRoomLeftX;
-const guestToiletTopZ = maidsRoomTopZ - B.guestToiletDepth - 0.2;
+const APT_WIDTH = 10.0;    // total apartment width
+const APT_DEPTH = 11.72;   // total apartment depth
+const RECEPTION_W = 5.78;  // reception width at top
+const KITCHEN_W = 4.12;
+const KITCHEN_D = 3.31;
+const MAIDS_W = 2.71;
+const MAIDS_D = 2.71;
+const TOILET_W = 2.22;     // guest toilet + passage
+const TOILET_D = 1.72;
+const CORRIDOR_W = 1.22;
+
+// Right-side rooms start X
+const RIGHT_X = APT_WIDTH - KITCHEN_W; // 5.88
+// Kitchen top Z
+const KITCHEN_TOP_Z = APT_DEPTH - KITCHEN_D; // 8.41
+// Maid's room
+const MAIDS_TOP_Z = KITCHEN_TOP_Z - MAIDS_D - 0.2; // ~5.50
+// Guest toilet
+const TOILET_TOP_Z = MAIDS_TOP_Z - TOILET_D - 0.2; // ~3.58
+
+// Garden L-shape: wraps left side and bottom of apartment
+const GARDEN_LEFT_W = 3.5;   // garden strip on the left
+const GARDEN_BOTTOM_D = 5.0; // garden strip on the bottom
+const GARDEN_TOTAL_W = APT_WIDTH + GARDEN_LEFT_W; // full width at bottom
 
 // ============================================================
 // ROOMS
@@ -144,130 +130,124 @@ export const rooms: Room[] = [
     name: "Reception",
     vertices: [
       [0, 0],
-      [B.receptionTopWidth, 0],
-      [B.receptionTopWidth, 5.5],
-      [kitchenLeftX - 0.2, 5.5],
-      [kitchenLeftX - 0.2, B.receptionDepth],
-      [0, B.receptionDepth],
+      [RECEPTION_W, 0],
+      [RECEPTION_W, 5.5],
+      [RIGHT_X, 5.5],
+      [RIGHT_X, APT_DEPTH],
+      [0, APT_DEPTH],
     ],
     color: COLORS.reception,
-    labelPosition: [2.89, 6.0],
+    labelPosition: [2.89, 5.0],
     dimensions: "5.78m × 11.72m",
   },
   {
     name: "Kitchen",
     vertices: [
-      [kitchenLeftX, kitchenTopZ],
-      [B.rightX, kitchenTopZ],
-      [B.rightX, B.receptionDepth],
-      [kitchenLeftX, B.receptionDepth],
+      [RIGHT_X, KITCHEN_TOP_Z],
+      [APT_WIDTH, KITCHEN_TOP_Z],
+      [APT_WIDTH, APT_DEPTH],
+      [RIGHT_X, APT_DEPTH],
     ],
     color: COLORS.kitchen,
-    labelPosition: [kitchenLeftX + B.kitchenWidth / 2, kitchenTopZ + B.kitchenDepth / 2],
+    labelPosition: [RIGHT_X + KITCHEN_W / 2, KITCHEN_TOP_Z + KITCHEN_D / 2],
     dimensions: "4.12m × 3.31m",
   },
   {
     name: "Maid's Room",
     vertices: [
-      [maidsRoomLeftX, maidsRoomTopZ],
-      [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ],
-      [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ + B.maidsRoomDepth],
-      [maidsRoomLeftX, maidsRoomTopZ + B.maidsRoomDepth],
+      [RIGHT_X, MAIDS_TOP_Z],
+      [RIGHT_X + MAIDS_W, MAIDS_TOP_Z],
+      [RIGHT_X + MAIDS_W, MAIDS_TOP_Z + MAIDS_D],
+      [RIGHT_X, MAIDS_TOP_Z + MAIDS_D],
     ],
     color: COLORS.maidsRoom,
-    labelPosition: [
-      maidsRoomLeftX + B.maidsRoomWidth / 2,
-      maidsRoomTopZ + B.maidsRoomDepth / 2,
-    ],
+    labelPosition: [RIGHT_X + MAIDS_W / 2, MAIDS_TOP_Z + MAIDS_D / 2],
     dimensions: "2.71m × 2.71m",
   },
   {
     name: "Guest Toilet",
     vertices: [
-      [guestToiletLeftX, guestToiletTopZ],
-      [guestToiletLeftX + B.guestToiletWidth + 1.0, guestToiletTopZ],
-      [guestToiletLeftX + B.guestToiletWidth + 1.0, guestToiletTopZ + B.guestToiletDepth + 0.5],
-      [guestToiletLeftX, guestToiletTopZ + B.guestToiletDepth + 0.5],
+      [RIGHT_X, TOILET_TOP_Z],
+      [RIGHT_X + TOILET_W, TOILET_TOP_Z],
+      [RIGHT_X + TOILET_W, TOILET_TOP_Z + TOILET_D],
+      [RIGHT_X, TOILET_TOP_Z + TOILET_D],
     ],
     color: COLORS.guestToilet,
-    labelPosition: [
-      guestToiletLeftX + (B.guestToiletWidth + 1.0) / 2,
-      guestToiletTopZ + (B.guestToiletDepth + 0.5) / 2,
-    ],
+    labelPosition: [RIGHT_X + TOILET_W / 2, TOILET_TOP_Z + TOILET_D / 2],
     dimensions: "2.22m × 1.72m",
   },
   {
-    name: "Staircase",
-    vertices: [
-      [staircaseLeftX, 0],
-      [B.rightX, 0],
-      [B.rightX, 3.5],
-      [staircaseLeftX, 3.5],
-    ],
-    color: COLORS.staircase,
-    labelPosition: [staircaseLeftX + B.staircaseWidth / 2, 1.75],
-    dimensions: "1.98m × 3.50m",
-  },
-  {
     name: "Garden",
+    // L-shaped: bottom strip + left strip
+    // We define it as a polygon forming the L
     vertices: [
-      [0, B.receptionDepth + 0.2],
-      [kitchenLeftX - 0.2, B.receptionDepth + 0.2],
-      [kitchenLeftX - 0.2, B.receptionDepth + 5.0],
-      [0, B.receptionDepth + 5.0],
+      [-GARDEN_LEFT_W, 0],                              // top-left of left strip
+      [0, 0],                                            // where left strip meets apartment top
+      [0, APT_DEPTH],                                    // bottom-left of apartment
+      [APT_WIDTH, APT_DEPTH],                            // bottom-right of apartment
+      [APT_WIDTH, APT_DEPTH + GARDEN_BOTTOM_D],          // bottom-right of bottom strip
+      [-GARDEN_LEFT_W, APT_DEPTH + GARDEN_BOTTOM_D],     // bottom-left corner of L
     ],
     color: COLORS.garden,
-    labelPosition: [2.5, B.receptionDepth + 2.6],
+    labelPosition: [2.0, APT_DEPTH + 2.5],
     dimensions: "Garden",
   },
 ];
+
+// Internal staircase data (dashed rectangle in reception)
+export const internalStairs = {
+  x: 0.8,           // left edge of stair area
+  z: 5.5,           // top edge of stair area
+  width: 3.93,      // matches dining width dimension
+  depth: 5.15,      // matches the 5.15 dimension
+  stepCount: 16,
+  goingUp: true,
+};
 
 // ============================================================
 // WALLS
 // ============================================================
 export const walls: WallSegment[] = [
-  // === EXTERIOR WALLS ===
-  // Top wall (north) - full width
-  { start: [0, 0], end: [B.rightX, 0], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Left wall (west) - full depth including garden boundary
-  { start: [0, 0], end: [0, B.receptionDepth + 5.0], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Bottom wall of reception/building
-  { start: [0, B.receptionDepth], end: [B.rightX, B.receptionDepth], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Right wall (east) - full depth
-  { start: [B.rightX, 0], end: [B.rightX, B.receptionDepth], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
-  // Garden bottom wall
-  { start: [0, B.receptionDepth + 5.0], end: [kitchenLeftX - 0.2, B.receptionDepth + 5.0], thickness: 0.25, height: WALL_HEIGHT * 0.4, isExterior: true },
-  // Garden right wall
-  { start: [kitchenLeftX - 0.2, B.receptionDepth], end: [kitchenLeftX - 0.2, B.receptionDepth + 5.0], thickness: 0.25, height: WALL_HEIGHT * 0.4, isExterior: true },
+  // === APARTMENT EXTERIOR WALLS ===
+  // Top wall (north)
+  { start: [0, 0], end: [APT_WIDTH, 0], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
+  // Left wall (west) of apartment
+  { start: [0, 0], end: [0, APT_DEPTH], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
+  // Bottom wall (south) of apartment
+  { start: [0, APT_DEPTH], end: [APT_WIDTH, APT_DEPTH], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
+  // Right wall (east) of apartment
+  { start: [APT_WIDTH, 0], end: [APT_WIDTH, APT_DEPTH], thickness: 0.25, height: WALL_HEIGHT, isExterior: true },
+
+  // === GARDEN BOUNDARY WALLS (low walls / fences) ===
+  // Garden left boundary
+  { start: [-GARDEN_LEFT_W, 0], end: [-GARDEN_LEFT_W, APT_DEPTH + GARDEN_BOTTOM_D], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
+  // Garden top boundary (left strip top)
+  { start: [-GARDEN_LEFT_W, 0], end: [0, 0], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
+  // Garden bottom boundary
+  { start: [-GARDEN_LEFT_W, APT_DEPTH + GARDEN_BOTTOM_D], end: [APT_WIDTH, APT_DEPTH + GARDEN_BOTTOM_D], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
+  // Garden right boundary (bottom strip right)
+  { start: [APT_WIDTH, APT_DEPTH], end: [APT_WIDTH, APT_DEPTH + GARDEN_BOTTOM_D], thickness: 0.15, height: WALL_HEIGHT * 0.35, isExterior: true },
 
   // === INTERIOR WALLS ===
-  // Reception right wall (upper portion - from top to corridor)
-  { start: [B.receptionTopWidth, 0], end: [B.receptionTopWidth, 5.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  // Wall between reception and kitchen/maid's area
-  { start: [kitchenLeftX - 0.2, 5.5], end: [kitchenLeftX - 0.2, B.receptionDepth], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  // Horizontal wall connecting reception right wall to right side rooms
-  { start: [B.receptionTopWidth, 5.5], end: [kitchenLeftX - 0.2, 5.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  
+  // Reception right wall (upper portion)
+  { start: [RECEPTION_W, 0], end: [RECEPTION_W, 5.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  // Horizontal wall from reception right to right-side rooms
+  { start: [RECEPTION_W, 5.5], end: [RIGHT_X, 5.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  // Vertical wall separating reception from kitchen/corridor
+  { start: [RIGHT_X, 5.5], end: [RIGHT_X, APT_DEPTH], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+
   // Kitchen top wall
-  { start: [kitchenLeftX, kitchenTopZ], end: [B.rightX, kitchenTopZ], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  // Kitchen left wall
-  { start: [kitchenLeftX, kitchenTopZ], end: [kitchenLeftX, B.receptionDepth], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  
+  { start: [RIGHT_X, KITCHEN_TOP_Z], end: [APT_WIDTH, KITCHEN_TOP_Z], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+
   // Maid's room walls
-  { start: [maidsRoomLeftX, maidsRoomTopZ], end: [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [maidsRoomLeftX, maidsRoomTopZ], end: [maidsRoomLeftX, maidsRoomTopZ + B.maidsRoomDepth], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ], end: [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ + B.maidsRoomDepth], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [maidsRoomLeftX, maidsRoomTopZ + B.maidsRoomDepth], end: [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ + B.maidsRoomDepth], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  
+  { start: [RIGHT_X, MAIDS_TOP_Z], end: [RIGHT_X + MAIDS_W, MAIDS_TOP_Z], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  { start: [RIGHT_X + MAIDS_W, MAIDS_TOP_Z], end: [RIGHT_X + MAIDS_W, MAIDS_TOP_Z + MAIDS_D], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  { start: [RIGHT_X, MAIDS_TOP_Z + MAIDS_D], end: [RIGHT_X + MAIDS_W, MAIDS_TOP_Z + MAIDS_D], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+
   // Guest toilet walls
-  { start: [guestToiletLeftX, guestToiletTopZ], end: [guestToiletLeftX + B.guestToiletWidth + 1.0, guestToiletTopZ], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [guestToiletLeftX, guestToiletTopZ], end: [guestToiletLeftX, guestToiletTopZ + B.guestToiletDepth + 0.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [guestToiletLeftX + B.guestToiletWidth + 1.0, guestToiletTopZ], end: [guestToiletLeftX + B.guestToiletWidth + 1.0, guestToiletTopZ + B.guestToiletDepth + 0.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [guestToiletLeftX, guestToiletTopZ + B.guestToiletDepth + 0.5], end: [guestToiletLeftX + B.guestToiletWidth + 1.0, guestToiletTopZ + B.guestToiletDepth + 0.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  
-  // Staircase walls
-  { start: [staircaseLeftX, 0], end: [staircaseLeftX, 3.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
-  { start: [staircaseLeftX, 3.5], end: [B.rightX, 3.5], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  { start: [RIGHT_X, TOILET_TOP_Z], end: [RIGHT_X + TOILET_W, TOILET_TOP_Z], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  { start: [RIGHT_X + TOILET_W, TOILET_TOP_Z], end: [RIGHT_X + TOILET_W, TOILET_TOP_Z + TOILET_D], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
+  { start: [RIGHT_X, TOILET_TOP_Z + TOILET_D], end: [RIGHT_X + TOILET_W, TOILET_TOP_Z + TOILET_D], thickness: 0.2, height: WALL_HEIGHT, isExterior: false },
 ];
 
 // ============================================================
@@ -276,53 +256,45 @@ export const walls: WallSegment[] = [
 export const doors: DoorOpening[] = [
   // Main entrance - right side of building
   {
-    position: [B.rightX, 5.0],
+    position: [APT_WIDTH, 5.0],
     width: 1.2,
     height: DOOR_HEIGHT,
     wallDirection: "z",
-    swingAngle: Math.PI / 2,
   },
-  // Door from reception to kitchen area
+  // Door from corridor to kitchen
   {
-    position: [kitchenLeftX - 0.2, 7.5],
+    position: [RIGHT_X + 1.5, KITCHEN_TOP_Z],
     width: DOOR_WIDTH_STANDARD,
     height: DOOR_HEIGHT,
-    wallDirection: "z",
+    wallDirection: "x",
   },
   // Door to maid's room
   {
-    position: [maidsRoomLeftX, maidsRoomTopZ + 1.2],
+    position: [RIGHT_X, MAIDS_TOP_Z + 1.2],
     width: DOOR_WIDTH_STANDARD,
     height: DOOR_HEIGHT,
     wallDirection: "z",
   },
   // Door to guest toilet
   {
-    position: [guestToiletLeftX, guestToiletTopZ + 0.7],
+    position: [RIGHT_X, TOILET_TOP_Z + 0.7],
     width: 0.7,
     height: DOOR_HEIGHT,
     wallDirection: "z",
   },
-  // Door to staircase
+  // Garden sliding door from reception (south wall)
   {
-    position: [staircaseLeftX, 1.5],
-    width: DOOR_WIDTH_STANDARD,
-    height: DOOR_HEIGHT,
-    wallDirection: "z",
-  },
-  // Kitchen door
-  {
-    position: [kitchenLeftX + 1.5, kitchenTopZ],
-    width: DOOR_WIDTH_STANDARD,
-    height: DOOR_HEIGHT,
-    wallDirection: "x",
-  },
-  // Garden sliding door from reception
-  {
-    position: [2.5, B.receptionDepth],
+    position: [2.5, APT_DEPTH],
     width: 2.0,
     height: DOOR_HEIGHT,
     wallDirection: "x",
+  },
+  // Door from reception to corridor/right side
+  {
+    position: [RIGHT_X, 7.5],
+    width: DOOR_WIDTH_STANDARD,
+    height: DOOR_HEIGHT,
+    wallDirection: "z",
   },
 ];
 
@@ -330,7 +302,7 @@ export const doors: DoorOpening[] = [
 // WINDOWS
 // ============================================================
 export const windows: WindowOpening[] = [
-  // Reception left wall windows (2 windows)
+  // Reception left wall windows
   {
     position: [0, 3.0],
     width: 1.5,
@@ -353,28 +325,31 @@ export const windows: WindowOpening[] = [
     sillHeight: WINDOW_SILL_HEIGHT,
     wallDirection: "x",
   },
-  // Kitchen bottom wall window
+  // Kitchen south wall window
   {
-    position: [kitchenLeftX + 2.0, B.receptionDepth],
+    position: [RIGHT_X + 2.0, APT_DEPTH],
     width: 1.2,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL_HEIGHT,
     wallDirection: "x",
   },
-  // Maid's room window (right wall)
+  // Maid's room window (east wall)
   {
-    position: [maidsRoomLeftX + B.maidsRoomWidth, maidsRoomTopZ + 1.35],
-    width: 1.0,
-    height: WINDOW_HEIGHT,
-    sillHeight: WINDOW_SILL_HEIGHT,
-    wallDirection: "z",
-  },
-  // Staircase window
-  {
-    position: [B.rightX, 1.5],
+    position: [APT_WIDTH, MAIDS_TOP_Z + 1.35],
     width: 1.0,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL_HEIGHT,
     wallDirection: "z",
   },
 ];
+
+// ============================================================
+// BOUNDING BOX for the entire property (apartment + garden)
+// Used to constrain the ground plane and grid
+// ============================================================
+export const propertyBounds = {
+  minX: -GARDEN_LEFT_W,
+  maxX: APT_WIDTH,
+  minZ: 0,
+  maxZ: APT_DEPTH + GARDEN_BOTTOM_D,
+};
