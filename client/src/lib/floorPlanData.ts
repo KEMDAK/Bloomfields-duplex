@@ -387,46 +387,58 @@ export const walls: WallSegment[] = [
 // DOORS
 // ============================================================
 export const doors: DoorOpening[] = [
-  // Entrance: on the west wall, below the notch
+  // 1. Entrance door: on the west wall, in the notch area
+  //    Arc swings inward (east) into the space below the stairs
   {
-    position: [0, (NOTCH_H + S_Z1) / 2],
+    position: [0, NOTCH_H + 0.05],
     width: 1.0,
     height: DOOR_HEIGHT,
     wallDirection: "z",
     label: "Entrance",
   },
-  // Guest Toilet door (through bottom wall)
+
+  // 2. Guest Toilet door: on GT's south wall (z=1.98)
+  //    Arc swings north into the GT room
   {
-    position: [(GT_X0 + GT_X1) / 2, GT_Z1],
-    width: 0.7,
+    position: [GT_X0 + 0.45, GT_Z1],
+    width: 0.70,
     height: DOOR_HEIGHT,
     wallDirection: "x",
   },
-  // Maid's Bathroom door (through bottom wall)
+
+  // 3. Maid's Bathroom door: on MB's south wall (z=1.98)
+  //    Arc swings north into the MB room
   {
-    position: [(MB_X0 + MB_X1) / 2, MB_Z1],
-    width: 0.7,
+    position: [MB_X0 + 0.45, MB_Z1],
+    width: 0.70,
     height: DOOR_HEIGHT,
     wallDirection: "x",
   },
-  // Maid's Room door: entrance from Maid's Bathroom
+
+  // 4. Maid's Room door: on the wall between MB and MR (x=MB_X1)
+  //    Entrance from Maid's Bathroom, arc swings east into MR
+  //    Positioned near the north end of the shared wall
   {
-    position: [MB_X1, (ROOMS_Z0 + Math.min(MB_Z1, MR_Z1)) / 2],
-    width: 0.8,
+    position: [MB_X1, 0.60],
+    width: 0.80,
     height: DOOR_HEIGHT,
     wallDirection: "z",
   },
-  // Kitchen door (from corridor, through MR/Kitchen wall)
+
+  // 5. Kitchen door: from corridor through MR/Kitchen wall (x=MR_X1)
+  //    Arc swings east into the kitchen
   {
     position: [MR_X1, (CORR_Z0 + CORR_Z1) / 2],
-    width: 0.9,
+    width: 0.90,
     height: DOOR_HEIGHT,
     wallDirection: "z",
   },
-  // Garden sliding door (south wall of reception)
+
+  // 6. Garden sliding door: on the south wall of reception (z=APT_DEPTH)
+  //    Wide sliding glass door leading to the garden
   {
-    position: [REC_EAST / 3, APT_DEPTH],
-    width: 2.0,
+    position: [4.5, APT_DEPTH],
+    width: 2.40,
     height: DOOR_HEIGHT,
     wallDirection: "x",
     label: "Garden",
@@ -437,35 +449,75 @@ export const doors: DoorOpening[] = [
 // WINDOWS
 // ============================================================
 export const windows: WindowOpening[] = [
-  // West wall windows (reception area)
+  // 1. Notch step wall windows: on the horizontal notch wall (z=NOTCH_H)
+  //    Two small windows visible in the "C" area on the notch step wall
   {
-    position: [0, (WALL_BELOW_ROOMS + APT_DEPTH) / 3],
-    width: 1.5,
+    position: [NOTCH_W / 3, NOTCH_H],
+    width: 0.60,
+    height: WINDOW_HEIGHT,
+    sillHeight: WINDOW_SILL,
+    wallDirection: "x",
+  },
+  {
+    position: [NOTCH_W * 2 / 3, NOTCH_H],
+    width: 0.60,
+    height: WINDOW_HEIGHT,
+    sillHeight: WINDOW_SILL,
+    wallDirection: "x",
+  },
+
+  // 2. West wall window (reception, upper): on the west wall of reception
+  {
+    position: [0, WALL_BELOW_ROOMS + 1.5],
+    width: 1.50,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
+
+  // 3. West wall window (reception, lower): second window on west wall
   {
-    position: [0, (WALL_BELOW_ROOMS + APT_DEPTH) * 2 / 3],
-    width: 1.5,
+    position: [0, APT_DEPTH - 1.8],
+    width: 1.50,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
-  // Kitchen east wall window
+
+  // 4. Kitchen north wall window: at the top of the kitchen
   {
-    position: [K_X1, KIT_D / 2],
-    width: 1.2,
+    position: [K_X0 + KIT_W / 2, 0],
+    width: 1.20,
+    height: WINDOW_HEIGHT,
+    sillHeight: WINDOW_SILL,
+    wallDirection: "x",
+  },
+
+  // 5. Kitchen east wall window: on the right side of the kitchen
+  {
+    position: [K_X1, 1.50],
+    width: 1.20,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
     wallDirection: "z",
   },
-  // Maid's Room north wall window
+
+  // 6. Maid's Room north wall window: at the top of MR
   {
     position: [(MR_X0 + MR_X1) / 2, 0],
-    width: 1.0,
+    width: 1.00,
     height: WINDOW_HEIGHT,
     sillHeight: WINDOW_SILL,
+    wallDirection: "x",
+  },
+
+  // 7. South wall window (reception): large window/sliding glass to garden
+  //    Adjacent to the garden sliding door
+  {
+    position: [7.0, APT_DEPTH],
+    width: 2.00,
+    height: WINDOW_HEIGHT,
+    sillHeight: 0.0,
     wallDirection: "x",
   },
 ];
