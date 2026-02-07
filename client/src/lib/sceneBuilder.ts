@@ -303,7 +303,7 @@ export function createStairs(): THREE.Group {
   const group = new THREE.Group();
   const s = internalStairs;
   const [baseX, baseZ] = toWorld(s.x, s.z);
-  const stepDepth = s.treadsDepth / s.stepCount;
+  const stepDepth = s.depth / s.stepCount;
   const stepHeight = WALL_HEIGHT / s.stepCount;
 
   const stepMat = new THREE.MeshStandardMaterial({ color: COLORS.stairs, roughness: 0.7 });
@@ -344,7 +344,7 @@ export function createStairs(): THREE.Group {
   group.add(outlineLine);
 
   // Label
-  const [lx, lz] = toWorld(s.x + s.width / 2, s.z + s.treadsDepth / 2);
+  const [lx, lz] = toWorld(s.x + s.width / 2, s.z + s.depth / 2);
   const sprite = makeTextSprite("Internal Stairs", {
     fontSize: 36, fontWeight: "bold", color: "#a0aec0",
     backgroundColor: "rgba(0,0,0,0.4)", padding: 8,
