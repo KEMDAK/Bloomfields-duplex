@@ -186,7 +186,6 @@ export const rooms: Room[] = [
     ],
     color: COLORS.reception,
     labelPosition: [4.0, (CORR_Z1 + APT_DEPTH) / 2],
-    dimensions: `${REC_LEFT_D}m × ${REC_RIGHT_D}m`,
   },
 
   // Stairs (U-shaped, open to reception on the south side)
@@ -297,12 +296,7 @@ export const rooms: Room[] = [
 // ============================================================
 // VOID & STAIRS
 // ============================================================
-export const receptionVoid = {
-  x: 0.30,
-  z: (CORR_Z1 + APT_DEPTH) / 2 - 1.5,
-  width: 5.15,
-  depth: 3.0,
-};
+export const receptionVoid = null;
 
 export const internalStairs = {
   x: S_X0,

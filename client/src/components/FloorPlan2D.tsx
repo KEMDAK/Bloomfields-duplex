@@ -98,19 +98,7 @@ export default function FloorPlan2D() {
       ctx.globalAlpha = 1;
     }
 
-    // ── Draw reception void (dashed rectangle) ──
-    ctx.setLineDash([8, 4]);
-    ctx.strokeStyle = "#00d4ff";
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.4;
-    ctx.strokeRect(
-      tx(receptionVoid.x),
-      ty(receptionVoid.z),
-      receptionVoid.width * scale,
-      receptionVoid.depth * scale
-    );
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
+    // (Reception void removed per user request)
 
     // ── Draw stair treads ──
     const s = internalStairs;

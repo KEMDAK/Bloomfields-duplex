@@ -277,14 +277,7 @@ function Canvas2D({ showDims, showLabels }: { showDims: boolean; showLabels: boo
       ctx.globalAlpha = 1;
     }
 
-    // ── Void (dashed) ──
-    ctx.setLineDash([8, 4]);
-    ctx.strokeStyle = "#00d4ff";
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.4;
-    ctx.strokeRect(tx(receptionVoid.x), ty(receptionVoid.z), receptionVoid.width * scale, receptionVoid.depth * scale);
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
+    // (Reception void removed per user request)
 
     // ── U-shaped Stair treads ──
     drawUShapedStairs(ctx, tx, ty, scale);
