@@ -438,15 +438,7 @@ export const doors: DoorOpening[] = [
     wallDirection: "z",
   },
 
-  // 7. Garden sliding door: on the south wall of reception (z=APT_DEPTH)
-  //    Wide sliding glass door leading to the garden
-  {
-    position: [4.5, APT_DEPTH],
-    width: 2.40,
-    height: DOOR_HEIGHT,
-    wallDirection: "x",
-    label: "Garden",
-  },
+  // 7. (REMOVED: Garden sliding door removed per user request)
 ];
 
 // ============================================================
