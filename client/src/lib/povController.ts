@@ -3,9 +3,10 @@
  * Provides WASD movement + mouse look for walking through the floor plan.
  * On desktop: uses pointer lock for immersive mouse look.
  * On mobile: uses touch controls (drag to look, virtual joystick to move).
+ * No wall collision — user can walk freely through all walls.
  */
 import * as THREE from "three";
-import { walls, propertyBounds, type WallSegment } from "./floorPlanData";
+import { propertyBounds } from "./floorPlanData";
 
 // Center offset (same as sceneBuilder)
 const CENTER_X = (propertyBounds.minX + propertyBounds.maxX) / 2;
@@ -19,7 +20,6 @@ const EYE_HEIGHT = 1.6;
 const MOVE_SPEED = 3.0; // meters per second
 const MOUSE_SENSITIVITY = 0.002;
 const TOUCH_LOOK_SENSITIVITY = 0.004;
-const COLLISION_RADIUS = 0.25; // meters from wall center
 
 // Detect mobile/touch device
 function isMobileDevice(): boolean {
@@ -35,57 +35,22 @@ function isPointerLockSupported(): boolean {
   return "pointerLockElement" in document && !isMobileDevice();
 }
 
-// Build wall segments in world coordinates for collision
-interface CollisionWall {
-  x1: number;
-  z1: number;
-  x2: number;
-  z2: number;
-  thickness: number;
-}
-
-function buildCollisionWalls(): CollisionWall[] {
-  return walls
-    .filter((w: WallSegment) => w.height > 1.0) // only full-height walls
-    .map((w: WallSegment) => {
-      const [x1, z1] = toWorld(w.start[0], w.start[1]);
-      const [x2, z2] = toWorld(w.end[0], w.end[1]);
-      return { x1, z1, x2, z2, thickness: w.thickness };
-    });
-}
-
-// Point-to-segment distance for collision
-function pointToSegmentDist(
-  px: number, pz: number,
-  x1: number, z1: number,
-  x2: number, z2: number
-): number {
-  const dx = x2 - x1;
-  const dz = z2 - z1;
-  const lenSq = dx * dx + dz * dz;
-  if (lenSq < 0.0001) {
-    return Math.sqrt((px - x1) ** 2 + (pz - z1) ** 2);
-  }
-  let t = ((px - x1) * dx + (pz - z1) * dz) / lenSq;
-  t = Math.max(0, Math.min(1, t));
-  const cx = x1 + t * dx;
-  const cz = z1 + t * dz;
-  return Math.sqrt((px - cx) ** 2 + (pz - cz) ** 2);
-}
-
 // Virtual joystick overlay for mobile
-function createJoystickOverlay(): {
+function createMobileOverlay(onExit: () => void): {
   container: HTMLDivElement;
+  exitBtn: HTMLDivElement;
   moveVec: { x: number; z: number };
   destroy: () => void;
 } {
   const moveVec = { x: 0, z: 0 };
 
+  // Joystick base
   const container = document.createElement("div");
+  container.id = "pov-joystick";
   container.style.cssText = `
     position: fixed; bottom: 30px; left: 30px; width: 120px; height: 120px;
     border-radius: 50%; background: rgba(255,255,255,0.15);
-    border: 2px solid rgba(255,255,255,0.3); z-index: 1000;
+    border: 2px solid rgba(255,255,255,0.3); z-index: 10000;
     touch-action: none; user-select: none;
   `;
 
@@ -98,17 +63,27 @@ function createJoystickOverlay(): {
   `;
   container.appendChild(knob);
 
-  // Exit button
+  // Exit button — large and obvious
   const exitBtn = document.createElement("div");
+  exitBtn.id = "pov-exit-btn";
   exitBtn.style.cssText = `
-    position: fixed; top: 20px; right: 20px; width: 44px; height: 44px;
-    border-radius: 50%; background: rgba(239,68,68,0.7);
-    border: 2px solid rgba(239,68,68,0.9); z-index: 1000;
+    position: fixed; top: 20px; right: 20px; width: 56px; height: 56px;
+    border-radius: 50%; background: rgba(239,68,68,0.85);
+    border: 3px solid rgba(255,255,255,0.8); z-index: 10000;
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px; color: white; font-weight: bold;
+    font-size: 24px; color: white; font-weight: bold;
     touch-action: none; user-select: none; cursor: pointer;
   `;
   exitBtn.textContent = "✕";
+
+  // Wire up exit button with both touch and click
+  const handleExit = (e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onExit();
+  };
+  exitBtn.addEventListener("click", handleExit);
+  exitBtn.addEventListener("touchend", handleExit);
 
   const centerX = 60;
   const centerY = 60;
@@ -165,6 +140,8 @@ function createJoystickOverlay(): {
   document.body.appendChild(exitBtn);
 
   const destroy = () => {
+    exitBtn.removeEventListener("click", handleExit);
+    exitBtn.removeEventListener("touchend", handleExit);
     container.removeEventListener("touchstart", handleTouchStart);
     container.removeEventListener("touchmove", handleTouchMove);
     container.removeEventListener("touchend", handleTouchEnd);
@@ -173,7 +150,7 @@ function createJoystickOverlay(): {
     exitBtn.remove();
   };
 
-  return { container, moveVec, destroy };
+  return { container, exitBtn, moveVec, destroy };
 }
 
 export class POVController {
@@ -189,12 +166,11 @@ export class POVController {
   private moveBackward = false;
   private moveLeft = false;
   private moveRight = false;
-  private collisionWalls: CollisionWall[];
   private clock = new THREE.Clock();
   private isLocked = false;
 
   // Mobile touch state
-  private joystick: { container: HTMLDivElement; moveVec: { x: number; z: number }; destroy: () => void } | null = null;
+  private mobileOverlay: ReturnType<typeof createMobileOverlay> | null = null;
   private lookTouchId: number | null = null;
   private lastLookX = 0;
   private lastLookY = 0;
@@ -206,7 +182,6 @@ export class POVController {
   constructor(camera: THREE.PerspectiveCamera, domElement: HTMLElement) {
     this.camera = camera;
     this.domElement = domElement;
-    this.collisionWalls = buildCollisionWalls();
     this.isMobile = isMobileDevice();
 
     this.onMouseMove = this.onMouseMove.bind(this);
@@ -245,17 +220,10 @@ export class POVController {
     this.velocity.set(0, 0, 0);
 
     if (this.isMobile) {
-      // Mobile: use touch controls
-      this.joystick = createJoystickOverlay();
-
-      // The exit button
-      const exitBtn = document.body.querySelector('div[style*="top: 20px"][style*="right: 20px"]') as HTMLElement;
-      if (exitBtn) {
-        exitBtn.addEventListener("touchend", () => {
-          this.disable();
-          this.onUnlock?.();
-        });
-      }
+      // Mobile: use touch controls with exit callback
+      this.mobileOverlay = createMobileOverlay(() => {
+        this.exitPOV();
+      });
 
       // Touch look on the main canvas area
       this.domElement.addEventListener("touchstart", this.onTouchStart, { passive: false });
@@ -266,7 +234,7 @@ export class POVController {
       this.isLocked = true;
       this.onLock?.();
     } else {
-      // Desktop: use pointer lock
+      // Desktop: use pointer lock + keyboard
       document.addEventListener("mousemove", this.onMouseMove);
       document.addEventListener("keydown", this.onKeyDown);
       document.addEventListener("keyup", this.onKeyUp);
@@ -278,16 +246,20 @@ export class POVController {
           this.domElement.requestPointerLock();
         } catch (err) {
           console.warn("Pointer lock request failed:", err);
-          // Still enable the mode, just without pointer lock
           this.isLocked = true;
           this.onLock?.();
         }
       } else {
-        // Pointer lock not supported, enable without it
         this.isLocked = true;
         this.onLock?.();
       }
     }
+  }
+
+  /** Clean exit from POV mode — calls disable + onUnlock */
+  private exitPOV() {
+    this.disable();
+    this.onUnlock?.();
   }
 
   disable() {
@@ -299,9 +271,9 @@ export class POVController {
 
     if (this.isMobile) {
       // Clean up mobile controls
-      if (this.joystick) {
-        this.joystick.destroy();
-        this.joystick = null;
+      if (this.mobileOverlay) {
+        this.mobileOverlay.destroy();
+        this.mobileOverlay = null;
       }
       this.domElement.removeEventListener("touchstart", this.onTouchStart);
       this.domElement.removeEventListener("touchmove", this.onTouchMove);
@@ -336,10 +308,10 @@ export class POVController {
     this.velocity.x -= this.velocity.x * 10.0 * delta;
     this.velocity.z -= this.velocity.z * 10.0 * delta;
 
-    if (this.isMobile && this.joystick) {
+    if (this.isMobile && this.mobileOverlay) {
       // Mobile: use joystick input
-      const jx = this.joystick.moveVec.x;
-      const jz = this.joystick.moveVec.z;
+      const jx = this.mobileOverlay.moveVec.x;
+      const jz = this.mobileOverlay.moveVec.z;
       if (Math.abs(jx) > 0.1 || Math.abs(jz) > 0.1) {
         this.velocity.x = -jx * MOVE_SPEED * 0.5;
         this.velocity.z = -jz * MOVE_SPEED * 0.5;
@@ -370,37 +342,14 @@ export class POVController {
     const moveX = right.x * (-this.velocity.x * delta) + forward.x * (-this.velocity.z * delta);
     const moveZ = right.z * (-this.velocity.x * delta) + forward.z * (-this.velocity.z * delta);
 
-    // Try to move, with collision detection
-    const newX = this.camera.position.x + moveX;
-    const newZ = this.camera.position.z + moveZ;
-
-    if (!this.checkCollision(newX, newZ)) {
-      this.camera.position.x = newX;
-      this.camera.position.z = newZ;
-    } else {
-      // Try sliding along walls: try X only, then Z only
-      if (!this.checkCollision(newX, this.camera.position.z)) {
-        this.camera.position.x = newX;
-      } else if (!this.checkCollision(this.camera.position.x, newZ)) {
-        this.camera.position.z = newZ;
-      }
-      // else: stuck, don't move
-    }
+    // Move freely — no wall collision
+    this.camera.position.x += moveX;
+    this.camera.position.z += moveZ;
 
     // Keep at eye height
     this.camera.position.y = EYE_HEIGHT;
 
     return true;
-  }
-
-  private checkCollision(x: number, z: number): boolean {
-    for (const wall of this.collisionWalls) {
-      const dist = pointToSegmentDist(x, z, wall.x1, wall.z1, wall.x2, wall.z2);
-      if (dist < COLLISION_RADIUS + wall.thickness / 2) {
-        return true;
-      }
-    }
-    return false;
   }
 
   // ── Desktop: Mouse Look ──
@@ -438,7 +387,8 @@ export class POVController {
         this.moveRight = true;
         break;
       case "Escape":
-        // Escape is handled by pointer lock automatically
+        // Manually exit POV on ESC (backup for pointer lock)
+        this.exitPOV();
         break;
     }
   }
@@ -471,7 +421,10 @@ export class POVController {
       this.onLock?.();
     } else {
       this.isLocked = false;
-      this.onUnlock?.();
+      // When pointer lock is released (e.g. pressing ESC), exit POV
+      if (this.enabled) {
+        this.exitPOV();
+      }
     }
   }
 
