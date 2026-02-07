@@ -1,6 +1,7 @@
 /**
- * Scene Builder - Constructs the 3D floor plan (FINAL PRECISE VERSION)
+ * Scene Builder - Constructs the 3D floor plan
  * All geometry derived from floorPlanData coordinates.
+ * Features: U-shaped stairs, notched NW corner, kitchen protrusion
  */
 import * as THREE from "three";
 import {
@@ -10,6 +11,7 @@ import {
   rooms,
   internalStairs,
   propertyBounds,
+  dimensionLines,
   COLORS,
   WALL_HEIGHT,
   type WallSegment,
@@ -297,38 +299,109 @@ function addDoorPanel(x: number, z: number, w: number, h: number, angle: number,
   group.add(frame);
 }
 
-// ─── Internal Staircase ──────────────────────────────────────
+// ─── U-Shaped Internal Staircase ─────────────────────────────
 
 export function createStairs(): THREE.Group {
   const group = new THREE.Group();
   const s = internalStairs;
   const [baseX, baseZ] = toWorld(s.x, s.z);
-  const stepDepth = s.depth / s.stepCount;
-  const stepHeight = WALL_HEIGHT / s.stepCount;
+  const totalW = s.width;
+  const totalD = s.depth;
+  const landingD = s.landingDepth;
+  const flightW = s.leftFlightWidth;
+  const leftFlightDepth = totalD - landingD;
+  const stepsPerFlight = Math.floor(s.stepCount / 2);
+  const stepD = leftFlightDepth / stepsPerFlight;
+  const stepH = WALL_HEIGHT / s.stepCount;
 
   const stepMat = new THREE.MeshStandardMaterial({ color: COLORS.stairs, roughness: 0.7 });
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x667788, transparent: true, opacity: 0.4 });
 
-  // Render stair treads
-  for (let i = 0; i < s.stepCount; i++) {
-    const geo = new THREE.BoxGeometry(s.width * 0.9, stepHeight, stepDepth * 0.85);
+  // Left flight: going north (from south to landing at top)
+  for (let i = 0; i < stepsPerFlight; i++) {
+    const geo = new THREE.BoxGeometry(flightW * 0.9, stepH, stepD * 0.85);
     const step = new THREE.Mesh(geo, stepMat);
+    // Steps go from bottom (south) upward (north)
+    const z = baseZ + totalD - (i + 0.5) * stepD;
     step.position.set(
-      baseX + s.width / 2,
-      stepHeight * i + stepHeight / 2,
-      baseZ + i * stepDepth + stepDepth / 2
+      baseX + flightW / 2,
+      stepH * i + stepH / 2,
+      z
     );
     step.castShadow = true;
     step.receiveShadow = true;
     group.add(step);
-    step.add(new THREE.LineSegments(
-      new THREE.EdgesGeometry(geo),
-      new THREE.LineBasicMaterial({ color: 0x667788, transparent: true, opacity: 0.4 })
-    ));
+    step.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat));
   }
 
-  // Dashed outline on floor (full void rectangle)
-  const [ox1, oz1] = toWorld(s.x, s.z);
-  const [ox2, oz2] = toWorld(s.x + s.width, s.z + s.depth);
+  // Landing platform (at the top/north)
+  const landingGeo = new THREE.BoxGeometry(totalW * 0.95, stepH, landingD * 0.9);
+  const landing = new THREE.Mesh(landingGeo, stepMat);
+  landing.position.set(
+    baseX + totalW / 2,
+    stepH * stepsPerFlight + stepH / 2,
+    baseZ + landingD / 2
+  );
+  landing.castShadow = true;
+  landing.receiveShadow = true;
+  group.add(landing);
+  landing.add(new THREE.LineSegments(new THREE.EdgesGeometry(landingGeo), edgeMat));
+
+  // Right flight: going south (from landing down)
+  for (let i = 0; i < stepsPerFlight; i++) {
+    const geo = new THREE.BoxGeometry(flightW * 0.9, stepH, stepD * 0.85);
+    const step = new THREE.Mesh(geo, stepMat);
+    const z = baseZ + landingD + (i + 0.5) * stepD;
+    step.position.set(
+      baseX + totalW - flightW / 2,
+      stepH * (stepsPerFlight - i) + stepH / 2,
+      z
+    );
+    step.castShadow = true;
+    step.receiveShadow = true;
+    group.add(step);
+    step.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeMat));
+  }
+
+  // Central dividing wall between flights
+  const centralWallH = WALL_HEIGHT * 0.6;
+  const centralGap = totalW - flightW * 2;
+  if (centralGap > 0.05) {
+    // Thin wall between the two flights
+    const cwGeo = new THREE.BoxGeometry(0.1, centralWallH, leftFlightDepth);
+    const cwMat = new THREE.MeshStandardMaterial({
+      color: COLORS.wallInterior, transparent: true, opacity: 0.5, roughness: 0.6,
+    });
+    const cw = new THREE.Mesh(cwGeo, cwMat);
+    cw.position.set(
+      baseX + totalW / 2,
+      centralWallH / 2,
+      baseZ + landingD + leftFlightDepth / 2
+    );
+    group.add(cw);
+  }
+
+  // Handrails (simple lines)
+  const railMat = new THREE.LineBasicMaterial({ color: 0x88aacc, transparent: true, opacity: 0.6 });
+  const railH = 1.0;
+
+  // Left flight outer rail
+  const lrPts = [
+    new THREE.Vector3(baseX, railH, baseZ + totalD),
+    new THREE.Vector3(baseX, railH + stepH * stepsPerFlight, baseZ + landingD),
+  ];
+  group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(lrPts), railMat));
+
+  // Right flight outer rail
+  const rrPts = [
+    new THREE.Vector3(baseX + totalW, railH + stepH * stepsPerFlight, baseZ + landingD),
+    new THREE.Vector3(baseX + totalW, railH, baseZ + totalD),
+  ];
+  group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(rrPts), railMat));
+
+  // Dashed outline on floor
+  const [ox1, oz1] = [baseX, baseZ];
+  const [ox2, oz2] = [baseX + totalW, baseZ + totalD];
   const outlinePts = [
     new THREE.Vector3(ox1, 0.02, oz1),
     new THREE.Vector3(ox2, 0.02, oz1),
@@ -345,7 +418,7 @@ export function createStairs(): THREE.Group {
 
   // Label
   const [lx, lz] = toWorld(s.x + s.width / 2, s.z + s.depth / 2);
-  const sprite = makeTextSprite("Internal Stairs", {
+  const sprite = makeTextSprite("U-Shaped Stairs", {
     fontSize: 36, fontWeight: "bold", color: "#a0aec0",
     backgroundColor: "rgba(0,0,0,0.4)", padding: 8,
   });
@@ -391,35 +464,12 @@ export function createLabels(): THREE.Group {
 export function createDimensionLines(): THREE.Group {
   const group = new THREE.Group();
 
-  const dims: { s: [number, number]; e: [number, number]; label: string; off: number }[] = [
-    // Reception top width: 5.78m
-    { s: [0, 0], e: [5.78, 0], label: "5.78m", off: -0.6 },
-    // Apartment full depth: 11.72m
-    { s: [0, 0], e: [0, 11.72], label: "11.72m", off: -0.8 },
-    // Kitchen width: 4.12m
-    { s: [5.98, 11.72], e: [10.10, 11.72], label: "4.12m", off: 0.6 },
-    // Kitchen depth: 3.31m
-    { s: [10.10, 8.41], e: [10.10, 11.72], label: "3.31m", off: 0.6 },
-    // Maid's room width: 2.71m
-    { s: [7.40, 2.18], e: [10.11, 2.18], label: "2.71m", off: -0.4 },
-    // Maid's room depth: 2.71m
-    { s: [10.11, 2.18], e: [10.11, 4.89], label: "2.71m", off: 0.5 },
-    // Stair void width: 5.15m
-    { s: [0.30, 0.80], e: [5.45, 0.80], label: "5.15m", off: -0.4 },
-    // Corridor width: 1.22m
-    { s: [5.98, 4.0], e: [7.20, 4.0], label: "1.22m", off: -0.3 },
-    // Dining area width: 3.93m
-    { s: [0.5, 10.0], e: [4.43, 10.0], label: "3.93m", off: 0.4 },
-    // Guest toilet: 1.98m
-    { s: [5.98, 0], e: [5.98, 1.98], label: "1.98m", off: -0.4 },
-  ];
-
-  dims.forEach((d) => {
-    const [sx, sz] = toWorld(d.s[0], d.s[1]);
-    const [ex, ez] = toWorld(d.e[0], d.e[1]);
+  dimensionLines.forEach((d) => {
+    const [sx, sz] = toWorld(d.start[0], d.start[1]);
+    const [ex, ez] = toWorld(d.end[0], d.end[1]);
     const isH = Math.abs(sz - ez) < 0.1;
-    const offX = isH ? 0 : d.off;
-    const offZ = isH ? d.off : 0;
+    const offX = isH ? 0 : d.offset;
+    const offZ = isH ? d.offset : 0;
 
     // Main line
     group.add(new THREE.Line(

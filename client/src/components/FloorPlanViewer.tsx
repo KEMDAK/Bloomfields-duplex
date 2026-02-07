@@ -5,6 +5,8 @@
  * - Smooth toggle between 2D (top-down canvas) and 3D (Three.js perspective)
  * - Ruler scale along edges in 2D mode
  * - Pan, zoom, orbit (touch-friendly)
+ * - U-shaped staircase rendering
+ * - Top-left notch (C area excluded)
  * - Dimension lines, labels, legend
  */
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -42,7 +44,7 @@ type ViewMode = "2d" | "3d";
 const COLORS_2D: Record<string, string> = {
   Reception: "#1a4d2a",
   "Guest Toilet": "#1a3a5c",
-  "Male Toilet": "#1a4a6c",
+  "Maid's Bathroom": "#1a4a6c",
   Corridor: "#2a3a4a",
   Stairs: "#4a5568",
   "Maid's Room": "#3a1a5c",
@@ -53,7 +55,7 @@ const COLORS_2D: Record<string, string> = {
 const LABEL_COLORS: Record<string, string> = {
   Reception: "#88dd88",
   "Guest Toilet": "#88aadd",
-  "Male Toilet": "#88bbdd",
+  "Maid's Bathroom": "#88bbdd",
   Corridor: "#aabbcc",
   Stairs: "#aabbcc",
   "Maid's Room": "#bb88dd",
@@ -284,28 +286,8 @@ function Canvas2D({ showDims, showLabels }: { showDims: boolean; showLabels: boo
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
-    // ── Stair treads ──
-    const s = internalStairs;
-    const stepH = s.depth / s.stepCount;
-    ctx.strokeStyle = "#8899aa";
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= s.stepCount; i++) {
-      const z = s.z + i * stepH;
-      ctx.beginPath();
-      ctx.moveTo(tx(s.x), ty(z));
-      ctx.lineTo(tx(s.x + s.width), ty(z));
-      ctx.stroke();
-    }
-    // Arrow
-    const arrowZ = s.z + s.depth * 0.3;
-    const arrowX = s.x + s.width / 2;
-    ctx.fillStyle = "#aabbcc";
-    ctx.beginPath();
-    ctx.moveTo(tx(arrowX), ty(s.z + 0.1));
-    ctx.lineTo(tx(arrowX - 0.3), ty(arrowZ));
-    ctx.lineTo(tx(arrowX + 0.3), ty(arrowZ));
-    ctx.closePath();
-    ctx.fill();
+    // ── U-shaped Stair treads ──
+    drawUShapedStairs(ctx, tx, ty, scale);
 
     // ── Walls ──
     for (const wall of walls) {
@@ -607,6 +589,115 @@ function Canvas2D({ showDims, showLabels }: { showDims: boolean; showLabels: boo
 }
 
 // ═══════════════════════════════════════════════════════════════
+// U-SHAPED STAIR DRAWING (2D)
+// ═══════════════════════════════════════════════════════════════
+function drawUShapedStairs(
+  ctx: CanvasRenderingContext2D,
+  tx: (x: number) => number,
+  ty: (z: number) => number,
+  scale: number,
+) {
+  const s = internalStairs;
+  const x0 = s.x;
+  const z0 = s.z;
+  const totalW = s.width;
+  const totalD = s.depth;
+  const landingD = s.landingDepth;
+  const flightW = s.leftFlightWidth;
+  const centralGap = totalW - flightW * 2; // gap between two flights
+
+  // Left flight: goes from bottom (south) to landing (north)
+  // Runs from z0+totalD up to z0+landingD
+  const leftFlightDepth = totalD - landingD;
+  const stepsPerFlight = Math.floor(s.stepCount / 2);
+  const stepD = leftFlightDepth / stepsPerFlight;
+
+  ctx.strokeStyle = "#8899aa";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.7;
+
+  // Left flight treads (going north/up from bottom)
+  for (let i = 0; i <= stepsPerFlight; i++) {
+    const z = z0 + totalD - i * stepD;
+    ctx.beginPath();
+    ctx.moveTo(tx(x0), ty(z));
+    ctx.lineTo(tx(x0 + flightW), ty(z));
+    ctx.stroke();
+  }
+
+  // Right flight treads (going south/down from landing)
+  for (let i = 0; i <= stepsPerFlight; i++) {
+    const z = z0 + landingD + i * stepD;
+    ctx.beginPath();
+    ctx.moveTo(tx(x0 + totalW - flightW), ty(z));
+    ctx.lineTo(tx(x0 + totalW), ty(z));
+    ctx.stroke();
+  }
+
+  // Landing area (top, between the two flights)
+  ctx.setLineDash([4, 3]);
+  ctx.strokeStyle = "#8899aa";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.5;
+  ctx.strokeRect(
+    tx(x0), ty(z0),
+    totalW * scale, landingD * scale
+  );
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // Central dividing wall between flights
+  ctx.strokeStyle = "#667788";
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(tx(x0 + flightW), ty(z0 + landingD));
+  ctx.lineTo(tx(x0 + flightW), ty(z0 + totalD));
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(tx(x0 + totalW - flightW), ty(z0 + landingD));
+  ctx.lineTo(tx(x0 + totalW - flightW), ty(z0 + totalD));
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // UP arrow on left flight
+  const arrowZ = z0 + totalD - leftFlightDepth * 0.4;
+  const arrowX = x0 + flightW / 2;
+  ctx.fillStyle = "#aabbcc";
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(tx(arrowX), ty(z0 + landingD + 0.1));
+  ctx.lineTo(tx(arrowX - 0.2), ty(arrowZ));
+  ctx.lineTo(tx(arrowX + 0.2), ty(arrowZ));
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // DOWN arrow on right flight
+  const arrowZ2 = z0 + landingD + leftFlightDepth * 0.4;
+  const arrowX2 = x0 + totalW - flightW / 2;
+  ctx.fillStyle = "#aabbcc";
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(tx(arrowX2), ty(z0 + totalD - 0.1));
+  ctx.lineTo(tx(arrowX2 - 0.2), ty(arrowZ2));
+  ctx.lineTo(tx(arrowX2 + 0.2), ty(arrowZ2));
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // "UP" / "DN" labels
+  ctx.font = "9px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#aabbcc";
+  ctx.globalAlpha = 0.6;
+  ctx.fillText("UP", tx(arrowX), ty(z0 + totalD * 0.7));
+  ctx.fillText("DN", tx(arrowX2), ty(z0 + totalD * 0.7));
+  ctx.globalAlpha = 1;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // RULER DRAWING
 // ═══════════════════════════════════════════════════════════════
 function drawRulers(
@@ -618,7 +709,7 @@ function drawRulers(
 ) {
   const RS = RULER_SIZE;
 
-  // ── Horizontal ruler (top) ──
+  // ── Horizontal ruler (bottom) ──
   ctx.fillStyle = "#111820";
   ctx.fillRect(RS, H - RS, W - RS, RS);
 
